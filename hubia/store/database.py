@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 
 import aiosqlite
 
@@ -68,7 +67,6 @@ async def close_db() -> None:
         _db = None
 
 
-@asynccontextmanager
 async def get_db() -> AsyncIterator[aiosqlite.Connection]:
     """FastAPI-compatible dependency yielding the database connection.
 

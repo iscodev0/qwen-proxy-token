@@ -24,8 +24,13 @@ class Settings(BaseSettings):
     # Encryption
     encryption_key: str = ""  # Fernet key, generate with cryptography.fernet
 
-    # CORS
-    cors_origins: list[str] = ["http://localhost:3000"]
+    # CORS — allow frontend dev servers and production origins
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:5173",
+    ]
 
     # Provider defaults
     meta_ai_doc_ids: dict[str, str] = {
