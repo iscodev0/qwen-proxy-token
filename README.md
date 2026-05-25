@@ -81,7 +81,7 @@ curl http://localhost:8089/v1/chat/completions \
 The provider fully supports OpenAI-compatible system prompts. If the first message in your request has `role: "system"`, it will be used as the system prompt for the conversation.
 
 ```bash
-curl http://localhost:8000/v1/chat/completions \
+curl http://localhost:8089/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "qwen/qwen3.7-max",
@@ -98,7 +98,7 @@ curl http://localhost:8000/v1/chat/completions \
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:8000/v1",
+    base_url="http://localhost:8089/v1",
     api_key="not-needed",
 )
 
@@ -132,7 +132,7 @@ Enable step-by-step reasoning for complex problems:
 export QWEN_ENABLE_THINKING="true"
 export QWEN_CHAT_MODE="thinking"
 
-curl http://localhost:8000/v1/chat/completions \
+curl http://localhost:8089/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "qwen/qwen3.7-max",
@@ -150,7 +150,7 @@ Enable web search for current information:
 export QWEN_ENABLE_SEARCH="true"
 export QWEN_CHAT_MODE="search"
 
-curl http://localhost:8000/v1/chat/completions \
+curl http://localhost:8089/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "qwen/qwen3.7-max",
@@ -168,7 +168,7 @@ Enable Python code execution:
 export QWEN_ENABLE_CODE_INTERPRETER="true"
 export QWEN_CHAT_MODE="code"
 
-curl http://localhost:8000/v1/chat/completions \
+curl http://localhost:8089/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "qwen/qwen3.7-max",
@@ -186,7 +186,7 @@ You can combine system prompts with tools:
 export QWEN_ENABLE_THINKING="true"
 export QWEN_CHAT_MODE="thinking"
 
-curl http://localhost:8000/v1/chat/completions \
+curl http://localhost:8089/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "qwen/qwen3.7-max",
@@ -253,7 +253,7 @@ qwen-proxy version
 ```python
 import httpx
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = "http://localhost:8089"
 
 # List models
 resp = httpx.get(f"{BASE_URL}/v1/models")
@@ -285,7 +285,7 @@ with httpx.stream("POST", f"{BASE_URL}/v1/chat/completions",
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:8000/v1",
+    base_url="http://localhost:8089/v1",
     api_key="not-needed",  # No API key required
 )
 
@@ -344,3 +344,4 @@ qwen-proxy start --reload
 ## License
 
 MIT
+# qwen-proxy-token
