@@ -17,7 +17,7 @@ app = typer.Typer(
 @app.command()
 def start(
     host: str = typer.Option("0.0.0.0", help="Host to bind"),
-    port: int = typer.Option(8000, help="Port to bind"),
+    port: int = typer.Option(8089, help="Port to bind"),
     reload: bool = typer.Option(False, "--reload", help="Enable auto-reload for development"),
 ) -> None:
     """Start the Qwen Proxy server."""

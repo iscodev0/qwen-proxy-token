@@ -35,12 +35,17 @@ pip install -e .
 ### Start the Server
 
 ```bash
-# Using the CLI
+# Using the CLI (recommended)
 qwen-proxy start
 
-# Or directly with uvicorn
-uvicorn hubia.main:app --host 0.0.0.0 --port 8089
+# With auto-reload for development
+qwen-proxy start --reload
+
+# Or directly with uvicorn (must specify port)
+uvicorn hubia.main:app --host 0.0.0.0 --port 8089 --reload
 ```
+
+The server will start on `http://localhost:8089` by default.
 
 ### Set Up Qwen Credentials
 
@@ -225,10 +230,10 @@ python get_chat_id.py
 export QWEN_CHAT_ID="your-chat-id-here"
 ```
 
-
+## CLI Commands
 
 ```bash
-# Start the server
+# Start the server (default: port 8089)
 qwen-proxy start [--host HOST] [--port PORT] [--reload]
 
 # Check server status
@@ -236,6 +241,18 @@ qwen-proxy status
 
 # Show version
 qwen-proxy version
+```
+
+**Examples:**
+```bash
+# Start on default port 8089
+qwen-proxy start
+
+# Start on custom port with auto-reload
+qwen-proxy start --port 9000 --reload
+
+# Start on specific host
+qwen-proxy start --host 127.0.0.1 --port 8089
 ```
 
 ## API Endpoints
