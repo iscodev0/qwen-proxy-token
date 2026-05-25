@@ -73,6 +73,18 @@ v1.get("/models", async (c) => {
 
 v1.post("/chat/completions", async (c) => {
   const body: ChatCompletionRequest = await c.req.json();
+  
+  // Log request details for debugging
+  console.log("\n=== Incoming Request ===");
+  console.log("Model:", body.model);
+  console.log("Messages:", body.messages.length);
+  console.log("Stream:", body.stream);
+  console.log("Tools:", body.tools ? `${body.tools.length} tools` : "none");
+  console.log("Tool choice:", body.tool_choice || "none");
+  if (body.tools && body.tools.length > 0) {
+    console.log("Tool names:", body.tools.map(t => t.function.name).join(", "));
+  }
+  console.log("========================\n");
 
   const db = getDb();
   const credRow = db
@@ -94,7 +106,9 @@ v1.post("/chat/completions", async (c) => {
         for await (const chunk of qwenProvider.chatCompletionStream(
           credentials,
           body.model,
-          body.messages
+          body.messages,
+          body.tools,
+          body.tool_choice
         )) {
           const sseData = {
             id: chunkId,
@@ -106,6 +120,7 @@ v1.post("/chat/completions", async (c) => {
                 index: 0,
                 delta: {
                   ...(chunk.content ? { content: chunk.content } : {}),
+                  ...(chunk.toolCalls ? { tool_calls: chunk.toolCalls } : {}),
                 },
                 finish_reason: chunk.finish || null,
               },
@@ -138,7 +153,9 @@ v1.post("/chat/completions", async (c) => {
     const result = await qwenProvider.chatCompletion(
       credentials,
       body.model,
-      body.messages
+      body.messages,
+      body.tools,
+      body.tool_choice
     );
 
     return c.json({
@@ -152,8 +169,9 @@ v1.post("/chat/completions", async (c) => {
           message: {
             role: "assistant",
             content: result.content,
+            ...(result.toolCalls ? { tool_calls: result.toolCalls } : {}),
           },
-          finish_reason: "stop",
+          finish_reason: result.toolCalls ? "tool_calls" : "stop",
         },
       ],
     });

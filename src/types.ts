@@ -1,6 +1,26 @@
 export interface Message {
-  role: "system" | "user" | "assistant";
+  role: "system" | "user" | "assistant" | "tool";
   content: string;
+  tool_call_id?: string;
+  tool_calls?: ToolCall[];
+}
+
+export interface ToolCall {
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
+export interface Tool {
+  type: "function";
+  function: {
+    name: string;
+    description?: string;
+    parameters?: any;
+  };
 }
 
 export interface ChatCompletionRequest {
@@ -9,6 +29,8 @@ export interface ChatCompletionRequest {
   stream?: boolean;
   temperature?: number;
   max_tokens?: number;
+  tools?: Tool[];
+  tool_choice?: "auto" | "none" | "required" | { type: "function"; function: { name: string } };
 }
 
 export interface ChatCompletionResponse {

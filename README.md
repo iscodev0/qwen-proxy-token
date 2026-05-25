@@ -152,6 +152,56 @@ Built with Bun + Hono for maximum performance:
 - **Native SQLite** — bun:sqlite for fast database access
 - **Streaming SSE** — Real-time response streaming with 120s timeout
 
+## OpenCode Integration
+
+Use Qwen models directly in [OpenCode](https://opencode.ai):
+
+### Quick Setup
+
+```bash
+# Automatic setup (recommended)
+./setup-opencode.sh
+```
+
+This script will:
+- Verify the proxy is running
+- Add the `qwen` provider to your OpenCode config
+- Configure available models
+- Optionally set Qwen as your default model
+
+### Manual Setup
+
+1. Add to `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "provider": {
+    "qwen": {
+      "api": "openai",
+      "name": "Qwen Proxy",
+      "options": {
+        "baseURL": "http://localhost:8089/v1",
+        "apiKey": "not-needed"
+      },
+      "models": {
+        "qwen3.7-max": {
+          "name": "Qwen3.7-Max",
+          "limit": { "context": 1000000, "output": 65536 }
+        }
+      }
+    }
+  }
+}
+```
+
+2. Restart OpenCode and use:
+
+```bash
+opencode --model qwen/qwen3.7-max
+```
+
+See [OPENCODE_SETUP.md](OPENCODE_SETUP.md) for detailed instructions, advanced configuration, and troubleshooting.
+
 ## License
 
 MIT

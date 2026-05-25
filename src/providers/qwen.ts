@@ -1,4 +1,4 @@
-import type { QwenCredentials, QwenToken, QwenModel, Message } from "../types";
+import type { QwenCredentials, QwenToken, QwenModel, Message, Tool, ToolCall } from "../types";
 
 const QWEN_BASE_URL = "https://chat.qwen.ai";
 const QWEN_API_URL = `${QWEN_BASE_URL}/api/v2`;
@@ -27,11 +27,19 @@ export class QwenProviderError extends Error {
   }
 }
 
+interface ActiveSession {
+  chatId: string;
+  model: string;
+  messageCount: number;
+  lastFid: string | null;
+}
+
 export class QwenProvider {
   private token: QwenToken | null = null;
   private modelsCache: QwenModel[] | null = null;
   private modelsCacheTime: Date | null = null;
   private retries: number;
+  private activeSession: ActiveSession | null = null;
 
   constructor(retries = 2) {
     this.retries = retries;
@@ -163,25 +171,68 @@ export class QwenProvider {
     return chatId;
   }
 
+  private async getOrCreateSession(token: string, model: string, messageCount: number): Promise<{ chatId: string; isNew: boolean }> {
+    if (
+      this.activeSession &&
+      this.activeSession.model === model &&
+      messageCount > this.activeSession.messageCount
+    ) {
+      console.log(`Reusing chat: ${this.activeSession.chatId} (messages: ${this.activeSession.messageCount} → ${messageCount})`);
+      return { chatId: this.activeSession.chatId, isNew: false };
+    }
+
+    const chatId = await this.createChat(token, model);
+    this.activeSession = {
+      chatId,
+      model,
+      messageCount: 0,
+      lastFid: null,
+    };
+    return { chatId, isNew: true };
+  }
+
+  private updateSession(messageCount: number, lastFid: string | null): void {
+    if (this.activeSession) {
+      this.activeSession.messageCount = messageCount;
+      this.activeSession.lastFid = lastFid;
+    }
+  }
+
   private buildChatPayload(
     model: string,
     messages: Message[],
     chatId: string,
-    stream: boolean
+    stream: boolean,
+    tools?: Tool[],
+    toolChoice?: "auto" | "none" | "required" | { type: "function"; function: { name: string } }
   ) {
     const qwenMessages: any[] = [];
     
     messages.forEach((msg, idx) => {
       const fid = crypto.randomUUID();
       const parentId = idx === 0 ? null : qwenMessages[idx - 1]?.fid || null;
+
+      const roleMap: Record<string, string> = {
+        user: "user",
+        assistant: "assistant",
+        system: "system",
+        tool: "tool",
+      };
+
+      const actionMap: Record<string, string> = {
+        user: "chat",
+        assistant: "assistant",
+        system: "system",
+        tool: "tool",
+      };
       
       qwenMessages.push({
         fid,
         parentId,
         childrenIds: [],
-        role: msg.role,
+        role: roleMap[msg.role] || msg.role,
         content: msg.content,
-        user_action: msg.role === "user" ? "chat" : "assistant",
+        user_action: actionMap[msg.role] || "chat",
         files: [],
         timestamp: Math.floor(Date.now() / 1000),
         models: msg.role === "user" ? [model] : [],
@@ -200,54 +251,125 @@ export class QwenProvider {
       });
     });
 
-    return {
+    const lastMsg = qwenMessages[qwenMessages.length - 1];
+    const payload: any = {
       stream,
       version: "2.1",
       incremental_output: true,
       chat_id: chatId,
       chat_mode: "normal",
       model,
-      parent_id: null,
+      parent_id: lastMsg?.parentId || null,
       messages: qwenMessages,
       timestamp: Math.floor(Date.now() / 1000),
     };
+
+    if (tools && tools.length > 0) {
+      payload.tools = tools.map(tool => ({
+        type: tool.type,
+        function: tool.function
+      }));
+      
+      if (toolChoice) {
+        payload.tool_choice = toolChoice;
+      }
+    }
+
+    return payload;
+  }
+
+  private toolsToPrompt(tools: Tool[]): string {
+    if (!tools || tools.length === 0) return "";
+    
+    let prompt = "\n\nYou have access to the following tools:\n\n";
+    
+    for (const tool of tools) {
+      prompt += `## ${tool.function.name}\n`;
+      if (tool.function.description) {
+        prompt += `${tool.function.description}\n`;
+      }
+      if (tool.function.parameters) {
+        prompt += `Parameters: ${JSON.stringify(tool.function.parameters, null, 2)}\n`;
+      }
+      prompt += "\n";
+    }
+    
+    prompt += `To use a tool, respond with a JSON block in this exact format:
+\`\`\`json
+{
+  "tool": "tool_name",
+  "parameters": {
+    "param1": "value1",
+    "param2": "value2"
+  }
+}
+\`\`\`
+
+You can use multiple tools in sequence if needed. After using a tool, wait for the result before continuing.`;
+    
+    return prompt;
+  }
+
+  private parseToolCalls(content: string): ToolCall[] | undefined {
+    const toolCalls: ToolCall[] = [];
+    const jsonBlockRegex = /```json\s*({[\s\S]*?})\s*```/g;
+    
+    let match;
+    while ((match = jsonBlockRegex.exec(content)) !== null) {
+      try {
+        if (!match[1]) continue;
+        const parsed = JSON.parse(match[1]);
+        if (parsed.tool && typeof parsed.tool === "string") {
+          toolCalls.push({
+            id: `call_${crypto.randomUUID().substring(0, 12)}`,
+            type: "function",
+            function: {
+              name: parsed.tool,
+              arguments: JSON.stringify(parsed.parameters || {}),
+            },
+          });
+        }
+      } catch {
+        continue;
+      }
+    }
+    
+    return toolCalls.length > 0 ? toolCalls : undefined;
   }
 
   async chatCompletion(
     credentials: QwenCredentials,
     model: string,
-    messages: Message[]
-  ): Promise<{ chatId: string; content: string }> {
+    messages: Message[],
+    tools?: Tool[],
+    toolChoice?: "auto" | "none" | "required" | { type: "function"; function: { name: string } }
+  ): Promise<{ chatId: string; content: string; toolCalls?: ToolCall[] }> {
     const token = await this.ensureToken(credentials);
 
     const cleanModel = model.startsWith("qwen/") ? model.substring(5) : model;
-    const chatId = await this.createChat(token, cleanModel);
+    const { chatId } = await this.getOrCreateSession(token, cleanModel, messages.length);
 
-    const processedMessages: Message[] = [];
-    let systemContent: string | null = null;
-
-    for (const m of messages) {
-      if (m.role === "system") {
-        systemContent = m.content;
-      } else {
-        processedMessages.push({ role: m.role, content: m.content });
-      }
+    const hasUserMessage = messages.some(m => m.role === "user");
+    if (!hasUserMessage) {
+      throw new QwenProviderError("No user message found");
     }
 
-    if (systemContent && processedMessages.length > 0) {
-      for (let i = 0; i < processedMessages.length; i++) {
-        const msg = processedMessages[i];
-        if (msg && msg.role === "user") {
-          processedMessages[i] = {
-            role: "user",
-            content: `${systemContent}\n\n${msg.content}`,
-          };
-          break;
+    let processedMessages: Message[] = [...messages];
+
+    if (tools && tools.length > 0 && toolChoice !== "none") {
+      const toolsPrompt = this.toolsToPrompt(tools);
+      processedMessages = processedMessages.map(m => {
+        if (m.role === "system") {
+          return { ...m, content: m.content + toolsPrompt };
         }
+        return m;
+      });
+      if (!processedMessages.some(m => m.role === "system")) {
+        processedMessages.unshift({ role: "system", content: toolsPrompt.trim() });
       }
     }
 
-    const payload = this.buildChatPayload(cleanModel, processedMessages, chatId, true);
+    const payload = this.buildChatPayload(cleanModel, processedMessages, chatId, false, tools, toolChoice);
     const headers = this.getHeaders(token);
 
     const response = await fetch(`${QWEN_API_URL}/chat/completions?chat_id=${chatId}`, {
@@ -258,6 +380,7 @@ export class QwenProvider {
 
     if (response.status === 401 || response.status === 403) {
       this.token = null;
+      this.activeSession = null;
       throw new QwenSessionExpiredError(
         `Qwen session expired (HTTP ${response.status})`
       );
@@ -270,7 +393,6 @@ export class QwenProvider {
       );
     }
 
-    // Read the SSE stream and collect full content
     if (!response.body) {
       throw new QwenProviderError("Response body is null");
     }
@@ -280,80 +402,100 @@ export class QwenProvider {
     let buffer = "";
     let fullContent = "";
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data: ")) continue;
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) continue;
 
-        const dataStr = trimmed.substring(6);
-        if (dataStr === "[DONE]") {
-          return { chatId, content: fullContent };
-        }
-
-        try {
-          const data: any = JSON.parse(dataStr);
-          const choices = data.choices || [];
-          if (choices.length > 0) {
-            const delta = choices[0].delta || {};
-            const text = delta.content || delta.text || "";
-            const phase = delta.phase || "";
-            
-            if (text && phase === "answer") {
-              fullContent += text;
+          const dataStr = trimmed.substring(6);
+          if (dataStr === "[DONE]") {
+            this.updateSession(messages.length, null);
+            const toolCalls = this.parseToolCalls(fullContent);
+            let cleanContent = fullContent;
+            if (toolCalls) {
+              cleanContent = fullContent.replace(/```json\s*{[\s\S]*?}\s*```/g, "").trim();
             }
+            return { chatId, content: cleanContent, toolCalls };
           }
-        } catch {
-          continue;
+
+          try {
+            const data: any = JSON.parse(dataStr);
+            const choices = data.choices || [];
+            if (choices.length > 0) {
+              const delta = choices[0].delta || {};
+              const text = delta.content || delta.text || "";
+              const phase = delta.phase || "";
+              
+              if (text && phase === "answer") {
+                fullContent += text;
+              }
+            }
+          } catch {
+            continue;
+          }
         }
       }
+    } finally {
+      reader.releaseLock();
     }
 
-    return { chatId, content: fullContent };
+    this.updateSession(messages.length, null);
+    const toolCalls = this.parseToolCalls(fullContent);
+    let cleanContent = fullContent;
+    if (toolCalls) {
+      cleanContent = fullContent.replace(/```json\s*{[\s\S]*?}\s*```/g, "").trim();
+    }
+    
+    return { chatId, content: cleanContent, toolCalls };
   }
 
   async *chatCompletionStream(
     credentials: QwenCredentials,
     model: string,
-    messages: Message[]
-  ): AsyncGenerator<{ content?: string; finish?: string }> {
+    messages: Message[],
+    tools?: Tool[],
+    toolChoice?: "auto" | "none" | "required" | { type: "function"; function: { name: string } }
+  ): AsyncGenerator<{ content?: string; finish?: string; toolCalls?: ToolCall[] }> {
     const token = await this.ensureToken(credentials);
 
     const cleanModel = model.startsWith("qwen/") ? model.substring(5) : model;
-    const chatId = await this.createChat(token, cleanModel);
+    const { chatId } = await this.getOrCreateSession(token, cleanModel, messages.length);
 
-    const processedMessages: Message[] = [];
-    let systemContent: string | null = null;
-
-    for (const m of messages) {
-      if (m.role === "system") {
-        systemContent = m.content;
-      } else {
-        processedMessages.push({ role: m.role, content: m.content });
-      }
+    const hasUserMessage = messages.some(m => m.role === "user");
+    if (!hasUserMessage) {
+      throw new QwenProviderError("No user message found");
     }
 
-    if (systemContent && processedMessages.length > 0) {
-      for (let i = 0; i < processedMessages.length; i++) {
-        const msg = processedMessages[i];
-        if (msg && msg.role === "user") {
-          processedMessages[i] = {
-            role: "user",
-            content: `${systemContent}\n\n${msg.content}`,
-          };
-          break;
+    let processedMessages: Message[] = [...messages];
+
+    if (tools && tools.length > 0 && toolChoice !== "none") {
+      const toolsPrompt = this.toolsToPrompt(tools);
+      processedMessages = processedMessages.map(m => {
+        if (m.role === "system") {
+          return { ...m, content: m.content + toolsPrompt };
         }
+        return m;
+      });
+      if (!processedMessages.some(m => m.role === "system")) {
+        processedMessages.unshift({ role: "system", content: toolsPrompt.trim() });
       }
     }
 
-    const payload = this.buildChatPayload(cleanModel, processedMessages, chatId, true);
+    const payload = this.buildChatPayload(cleanModel, processedMessages, chatId, true, tools, toolChoice);
     const headers = this.getHeaders(token);
+
+    console.log(`\n=== Sending to Qwen ===`);
+    console.log(`Chat ID: ${chatId}`);
+    console.log(`Messages: ${processedMessages.length}`);
+    console.log(`Roles: ${processedMessages.map(m => m.role).join(', ')}`);
 
     const response = await fetch(`${QWEN_API_URL}/chat/completions?chat_id=${chatId}`, {
       method: "POST",
@@ -361,8 +503,11 @@ export class QwenProvider {
       body: JSON.stringify(payload),
     });
 
+    console.log(`Qwen response status: ${response.status}`);
+
     if (response.status === 401 || response.status === 403) {
       this.token = null;
+      this.activeSession = null;
       throw new QwenSessionExpiredError(
         `Qwen session expired (HTTP ${response.status})`
       );
@@ -370,6 +515,7 @@ export class QwenProvider {
 
     if (!response.ok) {
       const text = await response.text();
+      console.error(`Qwen error: ${text}`);
       throw new QwenProviderError(
         `Qwen returned HTTP ${response.status}: ${text.substring(0, 500)}`
       );
@@ -382,49 +528,87 @@ export class QwenProvider {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let chunkCount = 0;
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          console.log(`Stream ended. Total chunks: ${chunkCount}`);
+          break;
+        }
+        chunkCount++;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data: ")) continue;
-
-        const dataStr = trimmed.substring(6);
-        if (dataStr === "[DONE]") {
-          yield { finish: "stop" };
-          return;
+        const rawChunk = decoder.decode(value, { stream: true });
+        buffer += rawChunk;
+        
+        if (chunkCount <= 2) {
+          console.log(`\n=== Raw chunk ${chunkCount} (len=${rawChunk.length}) ===`);
+          console.log(rawChunk.substring(0, 500));
+          console.log(`=== End chunk ${chunkCount} ===\n`);
         }
 
-        try {
-          const data: any = JSON.parse(dataStr);
-          const choices = data.choices || [];
-          if (choices.length > 0) {
-            const delta = choices[0].delta || {};
-            const text = delta.content || delta.text || "";
-            const phase = delta.phase || "";
-            const finish = choices[0].finish_reason;
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
-            if (text && phase === "answer") {
-              yield { content: text };
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) {
+            if (trimmed.length > 0) {
+              console.log(`Non-data line: ${trimmed.substring(0, 100)}`);
             }
-            if (finish) {
-              yield { finish };
-              return;
-            }
+            continue;
           }
-        } catch {
-          continue;
+
+          const dataStr = trimmed.substring(6);
+          if (dataStr === "[DONE]") {
+            console.log(`Stream [DONE] received`);
+            this.updateSession(messages.length, null);
+            yield { finish: "stop" };
+            return;
+          }
+
+          try {
+            const data: any = JSON.parse(dataStr);
+            const choices = data.choices || [];
+            if (choices.length > 0) {
+              const delta = choices[0].delta || {};
+              const text = delta.content || delta.text || "";
+              const phase = delta.phase || "";
+              const finish = choices[0].finish_reason;
+
+              if (chunkCount <= 3) {
+                console.log(`Chunk ${chunkCount}: phase=${phase}, text_len=${text.length}, finish=${finish}`);
+              }
+
+              if (text && phase === "answer") {
+                yield { content: text };
+              }
+              if (finish) {
+                console.log(`Stream finished: ${finish}`);
+                this.updateSession(messages.length, null);
+                yield { finish };
+                return;
+              }
+            }
+          } catch (e) {
+            console.log(`Parse error: ${dataStr.substring(0, 100)}`);
+            continue;
+          }
         }
       }
-    }
 
-    yield { finish: "stop" };
+      console.log(`Stream loop exited normally`);
+      if (buffer.length > 0) {
+        console.log(`\n=== Remaining buffer (len=${buffer.length}) ===`);
+        console.log(buffer.substring(0, 500));
+        console.log(`=== End buffer ===\n`);
+      }
+      this.updateSession(messages.length, null);
+      yield { finish: "stop" };
+    } finally {
+      reader.releaseLock();
+    }
   }
 
   async listModels(): Promise<QwenModel[]> {
