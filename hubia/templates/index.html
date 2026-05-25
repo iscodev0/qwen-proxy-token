@@ -315,7 +315,7 @@ tailwind.config = {
             <p class="text-xs font-medium text-gray-500 mb-1.5">List available models (curl)</p>
             <div class="rounded-lg bg-gray-900 px-4 py-3 overflow-x-auto">
               <pre class="text-xs text-gray-300 leading-relaxed font-mono"><span class="text-gray-500"># List models</span>
-curl http://localhost:8000/v1/models</pre>
+curl http://localhost:8089/v1/models</pre>
             </div>
           </div>
 
@@ -323,7 +323,7 @@ curl http://localhost:8000/v1/models</pre>
             <p class="text-xs font-medium text-gray-500 mb-1.5">Chat completion (curl, non-streaming)</p>
             <div class="rounded-lg bg-gray-900 px-4 py-3 overflow-x-auto">
               <pre class="text-xs text-gray-300 leading-relaxed font-mono"><span class="text-gray-500"># Chat completion</span>
-curl http://localhost:8000/v1/chat/completions \
+curl http://localhost:8089/v1/chat/completions \
   -H <span class="text-amber-300">"Content-Type: application/json"</span> \
   -d '{
     <span class="text-sky-300">"model"</span>: <span class="text-emerald-300">"qwen/qwen3.7-max"</span>,
@@ -336,7 +336,7 @@ curl http://localhost:8000/v1/chat/completions \
             <p class="text-xs font-medium text-gray-500 mb-1.5">Chat completion (curl, streaming)</p>
             <div class="rounded-lg bg-gray-900 px-4 py-3 overflow-x-auto">
               <pre class="text-xs text-gray-300 leading-relaxed font-mono"><span class="text-gray-500"># Streaming chat completion</span>
-curl http://localhost:8000/v1/chat/completions \
+curl http://localhost:8089/v1/chat/completions \
   -H <span class="text-amber-300">"Content-Type: application/json"</span> \
   -d '{
     <span class="text-sky-300">"model"</span>: <span class="text-emerald-300">"qwen/qwen3.7-max"</span>,
@@ -351,7 +351,7 @@ curl http://localhost:8000/v1/chat/completions \
             <div class="rounded-lg bg-gray-900 px-4 py-3 overflow-x-auto">
               <pre class="text-xs text-gray-300 leading-relaxed font-mono"><span class="text-gray-500">import httpx</span>
 
-BASE_URL = <span class="text-emerald-300">"http://localhost:8000"</span>
+BASE_URL = <span class="text-emerald-300">"http://localhost:8089"</span>
 
 <span class="text-gray-500"># List models</span>
 resp = httpx.get(<span class="text-emerald-300">f"{BASE_URL}/v1/models"</span>)
@@ -381,7 +381,7 @@ resp = httpx.post(<span class="text-emerald-300">f"{BASE_URL}/v1/chat/completion
           <div>
             <p class="text-xs font-medium text-gray-500 mb-1.5">JavaScript (fetch)</p>
             <div class="rounded-lg bg-gray-900 px-4 py-3 overflow-x-auto">
-              <pre class="text-xs text-gray-300 leading-relaxed font-mono"><span class="text-gray-500">const</span> BASE_URL = <span class="text-emerald-300">"http://localhost:8000"</span>;
+              <pre class="text-xs text-gray-300 leading-relaxed font-mono"><span class="text-gray-500">const</span> BASE_URL = <span class="text-emerald-300">"http://localhost:8089"</span>;
 
 <span class="text-gray-500">// List models</span>
 <span class="text-blue-300">const</span> modelsResp = <span class="text-blue-300">await</span> fetch(<span class="text-emerald-300">`${BASE_URL}/v1/models`</span>);
