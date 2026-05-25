@@ -53,7 +53,7 @@ def status() -> None:
     try:
         response = httpx.get("http://localhost:8089/health", timeout=2.0)
         if response.status_code == 200:
-            typer.echo("Qwen Proxy is running on http://localhost:8000")
+            typer.echo("Qwen Proxy is running on http://localhost:8089")
         else:
             typer.echo(f"Qwen Proxy responded with status {response.status_code}")
     except httpx.ConnectError:
