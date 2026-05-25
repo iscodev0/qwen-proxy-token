@@ -1,4 +1,4 @@
-# Hubia Bun - Qwen Proxy
+# Hubia - Qwen Proxy
 
 OpenAI-compatible API proxy for Qwen AI built with **Bun** and **Hono** for maximum performance.
 
@@ -6,10 +6,11 @@ OpenAI-compatible API proxy for Qwen AI built with **Bun** and **Hono** for maxi
 
 - **OpenAI-compatible API** — Drop-in replacement for OpenAI SDK
 - **Streaming support** — Real-time Server-Sent Events (SSE)
-- **Bearer JWT auth** — Direct email/password authentication to Qwen
-- **Dynamic models** — Automatically fetches available models from Qwen API
-- **Auto token refresh** — JWT tokens are cached and refreshed automatically
+- **Bearer JWT auth** — Direct JWT token authentication to Qwen
+- **Dynamic models** — Automatically fetches 23+ available models from Qwen API
+- **Auto token refresh** — JWT tokens are cached and validated automatically
 - **High performance** — Built with Bun runtime for speed
+- **Web Dashboard** — Interactive UI for configuration and testing
 
 ## Quick Start
 
@@ -20,23 +21,7 @@ OpenAI-compatible API proxy for Qwen AI built with **Bun** and **Hono** for maxi
 ### Installation
 
 ```bash
-cd hubia-bun
 bun install
-```
-
-### Configuration
-
-Copy `.env.example` to `.env` and configure:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
-```
-PORT=8089
-HOST=0.0.0.0
-SECRET_KEY=your-secret-key-here
 ```
 
 ### Start the Server
@@ -53,26 +38,7 @@ The server will start on `http://localhost:8089` by default.
 
 ## API Usage
 
-### 1. Login to get JWT token
-
-```bash
-curl -X POST http://localhost:8089/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "myuser",
-    "password": "mypassword"
-  }'
-```
-
-Response:
-```json
-{
-  "token": "eyJhbGc...",
-  "user": { "id": 1, "username": "myuser" }
-}
-```
-
-### 2. Configure Qwen JWT Token
+### 1. Configure Qwen JWT Token
 
 Get your JWT token from chat.qwen.ai:
 1. Login at [chat.qwen.ai](https://chat.qwen.ai)
@@ -82,25 +48,22 @@ Get your JWT token from chat.qwen.ai:
 ```bash
 curl -X POST http://localhost:8089/v1/auth/qwen \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{
     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }'
 ```
 
-### 3. List available models
+### 2. List available models
 
 ```bash
-curl http://localhost:8089/v1/models \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+curl http://localhost:8089/v1/models
 ```
 
-### 4. Chat completion (non-streaming)
+### 3. Chat completion (non-streaming)
 
 ```bash
 curl -X POST http://localhost:8089/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{
     "model": "qwen/qwen3.7-max",
     "messages": [
@@ -109,12 +72,11 @@ curl -X POST http://localhost:8089/v1/chat/completions \
   }'
 ```
 
-### 5. Chat completion (streaming)
+### 4. Chat completion (streaming)
 
 ```bash
 curl -X POST http://localhost:8089/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{
     "model": "qwen/qwen3.7-max",
     "messages": [
@@ -131,7 +93,7 @@ import OpenAI from "openai";
 
 const client = new OpenAI({
   baseURL: "http://localhost:8089/v1",
-  apiKey: "YOUR_JWT_TOKEN",
+  apiKey: "not-needed",
 });
 
 const response = await client.chat.completions.create({
@@ -144,11 +106,19 @@ const response = await client.chat.completions.create({
 console.log(response.choices[0].message.content);
 ```
 
+## Web Dashboard
+
+Open `http://localhost:8089/` in your browser to access the interactive dashboard:
+
+- **Dashboard** — Overview and quick start guide
+- **Qwen Token** — Configure your Qwen JWT token
+- **Models** — Browse all available models
+- **Playground** — Test chat completions with streaming support
+
 ## API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/v1/auth/login` | Login to get proxy JWT token |
 | POST | `/v1/auth/qwen` | Configure Qwen JWT token |
 | GET | `/v1/models` | List available models |
 | POST | `/v1/chat/completions` | Chat completion (stream or non-stream) |
@@ -158,10 +128,9 @@ console.log(response.choices[0].message.content);
 ## Architecture
 
 ```
-hubia-bun/
+hubia/
 ├── src/
 │   ├── index.ts          # Entry point
-│   ├── auth.ts           # JWT auth middleware
 │   ├── types.ts          # TypeScript types
 │   ├── db/
 │   │   └── index.ts      # SQLite database
@@ -169,6 +138,8 @@ hubia-bun/
 │   │   └── qwen.ts       # Qwen API provider
 │   └── routes/
 │       └── v1.ts         # API routes
+├── public/
+│   └── index.html        # Web dashboard
 ├── package.json
 └── tsconfig.json
 ```
@@ -178,16 +149,8 @@ hubia-bun/
 Built with Bun + Hono for maximum performance:
 - **Bun runtime** — 3x faster than Node.js
 - **Hono framework** — Ultra-fast, lightweight web framework
-- **Native SQLite** — better-sqlite3 for fast database access
-- **Streaming SSE** — Real-time response streaming
-
-## Migration from Python
-
-This is a complete rewrite of the original Python/FastAPI version with:
-- Removed web scraping system (Scrapling, Playwright)
-- Direct Bearer JWT authentication
-- Simplified architecture
-- Better performance with Bun runtime
+- **Native SQLite** — bun:sqlite for fast database access
+- **Streaming SSE** — Real-time response streaming with 120s timeout
 
 ## License
 

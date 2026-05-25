@@ -308,7 +308,7 @@
 
     <div class="tabs">
       <button class="tab active" data-tab="dashboard">Dashboard</button>
-      <button class="tab" data-tab="auth">Auth</button>
+      <button class="tab" data-tab="auth">Qwen Token</button>
       <button class="tab" data-tab="models">Models</button>
       <button class="tab" data-tab="playground">Playground</button>
     </div>
@@ -324,26 +324,20 @@
           <div class="stat-value" id="requestCount">0</div>
           <div class="stat-label">Requests Made</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-value" id="tokenStatus">-</div>
-          <div class="stat-label">JWT Token</div>
-        </div>
       </div>
 
       <div class="card">
         <h2>Quick Start</h2>
         <div class="alert alert-info">
-          <strong>1.</strong> Login to get JWT token (Auth tab)<br>
-          <strong>2.</strong> Configure Qwen credentials (Auth tab)<br>
-          <strong>3.</strong> Test chat completions (Playground tab)
+          <strong>1.</strong> Configure Qwen JWT token (Qwen Token tab)<br>
+          <strong>2.</strong> Test chat completions (Playground tab)
         </div>
       </div>
 
       <div class="card">
         <h2>API Endpoints</h2>
         <div style="font-family: monospace; font-size: 0.875rem; line-height: 2;">
-          <div><span style="color: var(--success)">POST</span> /v1/auth/login — Get JWT token</div>
-          <div><span style="color: var(--success)">POST</span> /v1/auth/qwen — Configure Qwen credentials</div>
+          <div><span style="color: var(--success)">POST</span> /v1/auth/qwen — Configure Qwen JWT token</div>
           <div><span style="color: var(--primary)">GET</span> /v1/models — List available models</div>
           <div><span style="color: var(--success)">POST</span> /v1/chat/completions — Chat completion</div>
           <div><span style="color: var(--primary)">GET</span> /health — Health check</div>
@@ -353,20 +347,6 @@
 
     <!-- Auth -->
     <div id="auth" class="panel">
-      <div class="card">
-        <h2>Login</h2>
-        <div id="loginAlert"></div>
-        <div class="form-group">
-          <label>Username</label>
-          <input type="text" id="loginUsername" placeholder="myuser">
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="loginPassword" placeholder="mypassword">
-        </div>
-        <button onclick="login()">Login</button>
-      </div>
-
       <div class="card">
         <h2>Configure Qwen JWT Token</h2>
         <div id="qwenAlert"></div>
@@ -382,13 +362,6 @@
           <textarea id="qwenToken" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." style="font-family: monospace; font-size: 0.75rem;"></textarea>
         </div>
         <button onclick="saveQwenCredentials()">Save Token</button>
-      </div>
-
-      <div class="card">
-        <h2>Current Token</h2>
-        <div id="currentToken" style="font-family: monospace; font-size: 0.75rem; word-break: break-all; color: var(--text-muted);">
-          No token
-        </div>
       </div>
     </div>
 
@@ -451,7 +424,6 @@
   </div>
 
   <script>
-    let token = localStorage.getItem('hubia_token');
     let requestCount = 0;
 
     // Tab switching
@@ -466,52 +438,11 @@
 
     // Update UI on load
     function updateUI() {
-      document.getElementById('currentToken').textContent = token || 'No token';
-      document.getElementById('tokenStatus').textContent = token ? '✓ Active' : '✗ None';
-      if (token) {
-        fetchModels();
-      }
-    }
-
-    // Login
-    async function login() {
-      const username = document.getElementById('loginUsername').value;
-      const password = document.getElementById('loginPassword').value;
-      
-      if (!username || !password) {
-        showAlert('loginAlert', 'Username and password required', 'error');
-        return;
-      }
-
-      try {
-        const resp = await fetch('/v1/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-
-        const data = await resp.json();
-        
-        if (resp.ok) {
-          token = data.token;
-          localStorage.setItem('hubia_token', token);
-          showAlert('loginAlert', 'Login successful!', 'success');
-          updateUI();
-        } else {
-          showAlert('loginAlert', data.error || 'Login failed', 'error');
-        }
-      } catch (err) {
-        showAlert('loginAlert', 'Network error', 'error');
-      }
+      fetchModels();
     }
 
     // Save Qwen credentials
     async function saveQwenCredentials() {
-      if (!token) {
-        showAlert('qwenAlert', 'Please login first', 'error');
-        return;
-      }
-
       const qwenToken = document.getElementById('qwenToken').value.trim();
       
       if (!qwenToken) {
@@ -523,8 +454,7 @@
         const resp = await fetch('/v1/auth/qwen', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({ token: qwenToken })
         });
@@ -543,15 +473,8 @@
 
     // Fetch models
     async function fetchModels() {
-      if (!token) {
-        document.getElementById('modelsGrid').innerHTML = '<div class="alert alert-error">Please login first</div>';
-        return;
-      }
-
       try {
-        const resp = await fetch('/v1/models', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const resp = await fetch('/v1/models');
 
         const data = await resp.json();
         const models = data.data || [];
@@ -583,11 +506,6 @@
 
     // Send chat
     async function sendChat() {
-      if (!token) {
-        alert('Please login first');
-        return;
-      }
-
       const model = document.getElementById('playgroundModel').value;
       const systemPrompt = document.getElementById('systemPrompt').value;
       const userMessage = document.getElementById('userMessage').value;
@@ -623,8 +541,7 @@
           const resp = await fetch('/v1/chat/completions', {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
+              'Content-Type': 'application/json'
             },
             body: JSON.stringify(payload)
           });
@@ -679,8 +596,7 @@
           const resp = await fetch('/v1/chat/completions', {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
+              'Content-Type': 'application/json'
             },
             body: JSON.stringify(payload)
           });
@@ -700,11 +616,6 @@
 
     // Send raw payload
     async function sendRawPayload() {
-      if (!token) {
-        alert('Please login first');
-        return;
-      }
-
       const rawPayload = document.getElementById('rawPayload').value;
       
       try {

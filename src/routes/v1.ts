@@ -1,53 +1,14 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { sign } from "hono/jwt";
 import { getDb } from "../db";
-import { authMiddleware } from "../auth";
 import { QwenProvider } from "../providers/qwen";
 import type { ChatCompletionRequest, QwenCredentials } from "../types";
-
-const SECRET_KEY = process.env.SECRET_KEY || "change-me";
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "change-me-encryption";
 
 const v1 = new Hono();
 
 const qwenProvider = new QwenProvider();
 
-v1.post("/auth/login", async (c) => {
-  const { username, password } = await c.req.json();
-
-  if (!username || !password) {
-    return c.json({ error: "Username and password required" }, 400);
-  }
-
-  const db = getDb();
-  const user = db
-    .query("SELECT id, username, password_hash FROM users WHERE username = ?")
-    .get(username) as { id: number; username: string; password_hash: string } | null;
-
-  if (!user) {
-    const hash = await Bun.password.hash(password);
-    db.run("INSERT INTO users (username, password_hash) VALUES (?, ?)", [username, hash]);
-    
-    const newUser = db
-      .query("SELECT id, username FROM users WHERE username = ?")
-      .get(username) as { id: number; username: string };
-
-    const token = await sign({ sub: newUser.id, username: newUser.username }, SECRET_KEY);
-    return c.json({ token, user: { id: newUser.id, username: newUser.username } });
-  }
-
-  const valid = await Bun.password.verify(password, user.password_hash);
-  if (!valid) {
-    return c.json({ error: "Invalid credentials" }, 401);
-  }
-
-  const token = await sign({ sub: user.id, username: user.username }, SECRET_KEY);
-  return c.json({ token, user: { id: user.id, username: user.username } });
-});
-
-v1.post("/auth/qwen", authMiddleware, async (c) => {
-  const user = c.get("user");
+v1.post("/auth/qwen", async (c) => {
   const { token } = await c.req.json();
 
   if (!token) {
@@ -65,23 +26,22 @@ v1.post("/auth/qwen", authMiddleware, async (c) => {
   const db = getDb();
   db.run(
     `INSERT INTO credentials (user_id, provider, encrypted_cookies) 
-     VALUES (?, 'qwen_chat', ?)
+     VALUES (1, 'qwen_chat', ?)
      ON CONFLICT(user_id, provider) DO UPDATE SET 
        encrypted_cookies = excluded.encrypted_cookies,
        updated_at = datetime('now')`,
-    [user.id, encoded]
+    [encoded]
   );
 
   return c.json({ success: true, message: "Qwen JWT token saved" });
 });
 
-v1.get("/models", authMiddleware, async (c) => {
-  const user = c.get("user");
+v1.get("/models", async (c) => {
   const db = getDb();
   
   const credRow = db
-    .query("SELECT encrypted_cookies FROM credentials WHERE user_id = ? AND provider = 'qwen_chat'")
-    .get(user.id) as { encrypted_cookies: string } | null;
+    .query("SELECT encrypted_cookies FROM credentials WHERE user_id = 1 AND provider = 'qwen_chat'")
+    .get() as { encrypted_cookies: string } | null;
 
   if (!credRow) {
     const models = await qwenProvider.listModels();
@@ -111,14 +71,13 @@ v1.get("/models", authMiddleware, async (c) => {
   });
 });
 
-v1.post("/chat/completions", authMiddleware, async (c) => {
-  const user = c.get("user");
+v1.post("/chat/completions", async (c) => {
   const body: ChatCompletionRequest = await c.req.json();
 
   const db = getDb();
   const credRow = db
-    .query("SELECT encrypted_cookies FROM credentials WHERE user_id = ? AND provider = 'qwen_chat'")
-    .get(user.id) as { encrypted_cookies: string } | null;
+    .query("SELECT encrypted_cookies FROM credentials WHERE user_id = 1 AND provider = 'qwen_chat'")
+    .get() as { encrypted_cookies: string } | null;
 
   if (!credRow) {
     return c.json({ error: "Qwen credentials not configured. POST /auth/qwen first." }, 400);
