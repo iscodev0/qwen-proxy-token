@@ -9,8 +9,8 @@
         "apiKey": "not-needed"
       },
       "models": {
-        "qwen3.7-max": {
-          "id": "qwen3.7-max",
+        "qwen/qwen3.7-max": {
+          "id": "qwen/qwen3.7-max",
           "name": "Qwen 3.7 Max",
           "family": "qwen",
           "reasoning": true,
@@ -29,8 +29,8 @@
             "output": 0
           }
         },
-        "qwen3.6-plus": {
-          "id": "qwen3.6-plus",
+        "qwen/qwen3.6-plus": {
+          "id": "qwen/qwen3.6-plus",
           "name": "Qwen 3.6 Plus",
           "family": "qwen",
           "reasoning": true,
@@ -49,8 +49,8 @@
             "output": 0
           }
         },
-        "qwen3.6-max-preview": {
-          "id": "qwen3.6-max-preview",
+        "qwen/qwen3.6-max-preview": {
+          "id": "qwen/qwen3.6-max-preview",
           "name": "Qwen 3.6 Max Preview",
           "family": "qwen",
           "reasoning": true,
@@ -72,6 +72,6 @@
       }
     }
   },
-  "model": "qwen-proxy/qwen3.7-max",
-  "small_model": "qwen-proxy/qwen3.6-plus"
+  "model": "qwen-proxy/qwen/qwen3.7-max",
+  "small_model": "qwen-proxy/qwen/qwen3.6-plus"
 }

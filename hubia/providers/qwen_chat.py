@@ -185,12 +185,16 @@ class QwenChatProvider(AIProvider):
 
         Based on reverse-engineered request format from chat.qwen.ai.
         
+        Note: Qwen doesn't accept system messages in the messages array.
+        If a system_prompt is provided, it will be prepended to the first
+        user message content.
+        
         Args:
             model: Model ID (e.g., "qwen3.7-max")
             messages: List of message dicts with 'role' and 'content'
             chat_id: Chat session ID
             stream: Whether to stream the response
-            system_prompt: Optional system prompt to prepend
+            system_prompt: Optional system prompt to prepend to first user message
             enable_thinking: Enable thinking/reasoning mode
             enable_search: Enable web search tool
             enable_code_interpreter: Enable code interpreter tool
@@ -203,32 +207,20 @@ class QwenChatProvider(AIProvider):
         qwen_messages = []
         parent_id = None
         
-        # Add system prompt if provided
-        if system_prompt:
-            fid = str(uuid.uuid4())
-            system_msg: dict[str, Any] = {
-                "fid": fid,
-                "parentId": None,
-                "childrenIds": [],
-                "role": "system",
-                "content": system_prompt,
-                "user_action": "system",
-                "files": [],
-                "timestamp": int(time.time()),
-                "models": [],
-                "chat_type": "t2t",
-                "feature_config": self._build_feature_config(
-                    enable_thinking, enable_search, enable_code_interpreter, chat_mode
-                ),
-                "extra": {"meta": {"subChatType": "t2t"}},
-                "sub_chat_type": "t2t",
-                "parent_id": None,
-            }
-            qwen_messages.append(system_msg)
-            parent_id = fid
+        # If system prompt is provided, prepend it to the first user message
+        if system_prompt and messages:
+            # Find the first user message and prepend system prompt
+            for i, msg in enumerate(messages):
+                if msg["role"] == "user":
+                    messages[i]["content"] = f"{system_prompt}\n\n{msg['content']}"
+                    break
 
-        # Process user and assistant messages
+        # Process user and assistant messages (NO system messages)
         for i, msg in enumerate(messages):
+            # Skip system messages - Qwen doesn't accept them
+            if msg["role"] == "system":
+                continue
+                
             fid = str(uuid.uuid4())
             next_fid = str(uuid.uuid4()) if i < len(messages) - 1 else None
             
@@ -275,6 +267,13 @@ class QwenChatProvider(AIProvider):
         # Add tools if any are enabled
         if tools:
             payload["tools"] = tools
+
+        # Log the final payload structure for debugging
+        logger.info(f"Built payload with {len(qwen_messages)} messages")
+        logger.info(f"Message roles: {[m['role'] for m in qwen_messages]}")
+        if system_prompt:
+            logger.info(f"System prompt length: {len(system_prompt)} chars")
+        logger.debug(f"Full payload: {json.dumps(payload, indent=2)[:2000]}")
 
         return payload
     
@@ -532,6 +531,21 @@ class QwenChatProvider(AIProvider):
                     f"{response.text[:500]}"
                 )
 
+            # Log response details for debugging (using print for now)
+            print(f"[DEBUG] Qwen response status: {response.status_code}")
+            print(f"[DEBUG] Qwen response headers: {dict(response.headers)}")
+            print(f"[DEBUG] Qwen response body length: {len(response.text)}")
+            print(f"[DEBUG] Qwen response body (first 1000 chars): {response.text[:1000]}")
+            
+            # Log the payload we sent for debugging
+            print(f"[DEBUG] Payload sent to Qwen:")
+            print(f"[DEBUG]   - stream: {json_payload.get('stream')}")
+            print(f"[DEBUG]   - model: {json_payload.get('model')}")
+            print(f"[DEBUG]   - chat_id: {json_payload.get('chat_id')}")
+            print(f"[DEBUG]   - Number of messages: {len(json_payload.get('messages', []))}")
+            for i, msg in enumerate(json_payload.get('messages', [])):
+                print(f"[DEBUG]     Message {i}: role={msg.get('role')}, content_length={len(msg.get('content', ''))}")
+
             # Wrap httpx response to match Scrapling interface
             class ResponseWrapper:
                 def __init__(self, resp):
@@ -565,15 +579,25 @@ class QwenChatProvider(AIProvider):
         local_model = self._resolve_model(request.model)
         chat_id = await self._get_or_create_chat_id(credentials, local_model)
 
-        # Extract system prompt if present
-        system_prompt = None
+        # Log incoming messages for debugging
+        logger.info(f"Received {len(request.messages)} messages from client")
+        logger.info(f"Message roles: {[m.role for m in request.messages]}")
+
+        # Extract and validate system prompts
+        system_prompts = []
         messages = []
         
         for m in request.messages:
             if m.role == "system":
-                system_prompt = m.content
+                system_prompts.append(m.content)
             else:
                 messages.append({"role": m.role, "content": m.content})
+        
+        # Combine multiple system prompts into one (Qwen only allows one)
+        system_prompt = None
+        if system_prompts:
+            system_prompt = "\n\n".join(system_prompts)
+            logger.info(f"Combined {len(system_prompts)} system prompt(s) into one")
 
         # Get chat mode from environment or default to "normal"
         chat_mode = os.environ.get("QWEN_CHAT_MODE", "normal")
@@ -599,7 +623,13 @@ class QwenChatProvider(AIProvider):
 
         # Parse SSE response and collect full content
         body_text = getattr(response, "text", "")
+        logger.info(f"Response body length: {len(body_text)}")
+        logger.info(f"Response headers: {response.headers}")
+        logger.info(f"Response body (first 1000 chars): {body_text[:1000]}")
+        
         full_content = self._parse_sse_response(body_text)
+        logger.info(f"Parsed content length: {len(full_content)}")
+        logger.info(f"Parsed content (first 500 chars): {full_content[:500]}")
 
         return ChatResponse(
             id=chat_id,
@@ -624,15 +654,25 @@ class QwenChatProvider(AIProvider):
         local_model = self._resolve_model(request.model)
         chat_id = await self._get_or_create_chat_id(credentials, local_model)
 
-        # Extract system prompt if present
-        system_prompt = None
+        # Log incoming messages for debugging
+        logger.info(f"[STREAM] Received {len(request.messages)} messages from client")
+        logger.info(f"[STREAM] Message roles: {[m.role for m in request.messages]}")
+
+        # Extract and validate system prompts
+        system_prompts = []
         messages = []
         
         for m in request.messages:
             if m.role == "system":
-                system_prompt = m.content
+                system_prompts.append(m.content)
             else:
                 messages.append({"role": m.role, "content": m.content})
+        
+        # Combine multiple system prompts into one (Qwen only allows one)
+        system_prompt = None
+        if system_prompts:
+            system_prompt = "\n\n".join(system_prompts)
+            logger.info(f"[STREAM] Combined {len(system_prompts)} system prompt(s) into one")
 
         # Get chat mode from environment or default to "normal"
         chat_mode = os.environ.get("QWEN_CHAT_MODE", "normal")
@@ -681,7 +721,17 @@ class QwenChatProvider(AIProvider):
                 choices = data.get("choices", [])
                 if choices:
                     delta = choices[0].get("delta", {})
+                    # Check for content in different possible fields
                     text = delta.get("content", "")
+                    # Also check for 'text' field as fallback
+                    if not text:
+                        text = delta.get("text", "")
+                    # Check for phase-based content
+                    if not text and "phase" in delta:
+                        phase = delta.get("phase")
+                        if phase == "answer":
+                            text = delta.get("content", "")
+                    
                     if text:
                         content_parts.append(text)
             except json.JSONDecodeError:
