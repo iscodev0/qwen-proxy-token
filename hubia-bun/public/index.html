@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hubia - Qwen Proxy Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    :root {
+      --bg: #0f0f0f;
+      --surface: #1a1a1a;
+      --surface-hover: #252525;
+      --border: #333;
+      --text: #e0e0e0;
+      --text-muted: #888;
+      --primary: #6366f1;
+      --primary-hover: #818cf8;
+      --success: #10b981;
+      --error: #ef4444;
+      --warning: #f59e0b;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+    
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+    
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+    }
+    
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .tab {
+      padding: 0.75rem 1.5rem;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    
+    .tab:hover {
+      color: var(--text);
+    }
+    
+    .tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+    
+    .panel {
+      display: none;
+    }
+    
+    .panel.active {
+      display: block;
+    }
+    
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .card h2 {
+      font-size: 1.125rem;
+      margin-bottom: 1rem;
+      font-weight: 600;
+    }
+    
+    .form-group {
+      margin-bottom: 1rem;
+    }
+    
+    label {
+      display: block;
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+    
+    input, textarea, select {
+      width: 100%;
+      padding: 0.75rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.875rem;
+      font-family: inherit;
+    }
+    
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+      font-family: 'Monaco', 'Menlo', monospace;
+    }
+    
+    button {
+      padding: 0.75rem 1.5rem;
+      background: var(--primary);
+      border: none;
+      border-radius: 6px;
+      color: white;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    
+    button:hover {
+      background: var(--primary-hover);
+    }
+    
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .btn-secondary {
+      background: var(--surface-hover);
+      border: 1px solid var(--border);
+    }
+    
+    .btn-secondary:hover {
+      background: var(--border);
+    }
+    
+    .alert {
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      font-size: 0.875rem;
+    }
+    
+    .alert-success {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid var(--success);
+      color: var(--success);
+    }
+    
+    .alert-error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid var(--error);
+      color: var(--error);
+    }
+    
+    .alert-info {
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid var(--primary);
+      color: var(--primary-hover);
+    }
+    
+    .model-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    
+    .model-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .model-card:hover {
+      border-color: var(--primary);
+      background: var(--surface-hover);
+    }
+    
+    .model-card.selected {
+      border-color: var(--primary);
+      background: rgba(99, 102, 241, 0.1);
+    }
+    
+    .model-name {
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    
+    .model-desc {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    
+    .response-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-top: 1rem;
+      max-height: 400px;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 0.875rem;
+      white-space: pre-wrap;
+    }
+    
+    .streaming-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      animation: pulse 1s infinite;
+      margin-right: 0.5rem;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+    }
+    
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    
+    .stat-label {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+    }
+    
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🚀 Hubia - Qwen Proxy</h1>
+      <div class="status">
+        <div class="status-dot"></div>
+        <span id="serverStatus">Connected</span>
+      </div>
+    </header>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="dashboard">Dashboard</button>
+      <button class="tab" data-tab="auth">Auth</button>
+      <button class="tab" data-tab="models">Models</button>
+      <button class="tab" data-tab="playground">Playground</button>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard" class="panel active">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="modelCount">-</div>
+          <div class="stat-label">Models Available</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="requestCount">0</div>
+          <div class="stat-label">Requests Made</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="tokenStatus">-</div>
+          <div class="stat-label">JWT Token</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Quick Start</h2>
+        <div class="alert alert-info">
+          <strong>1.</strong> Login to get JWT token (Auth tab)<br>
+          <strong>2.</strong> Configure Qwen credentials (Auth tab)<br>
+          <strong>3.</strong> Test chat completions (Playground tab)
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>API Endpoints</h2>
+        <div style="font-family: monospace; font-size: 0.875rem; line-height: 2;">
+          <div><span style="color: var(--success)">POST</span> /v1/auth/login — Get JWT token</div>
+          <div><span style="color: var(--success)">POST</span> /v1/auth/qwen — Configure Qwen credentials</div>
+          <div><span style="color: var(--primary)">GET</span> /v1/models — List available models</div>
+          <div><span style="color: var(--success)">POST</span> /v1/chat/completions — Chat completion</div>
+          <div><span style="color: var(--primary)">GET</span> /health — Health check</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Auth -->
+    <div id="auth" class="panel">
+      <div class="card">
+        <h2>Login</h2>
+        <div id="loginAlert"></div>
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="loginUsername" placeholder="myuser">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="loginPassword" placeholder="mypassword">
+        </div>
+        <button onclick="login()">Login</button>
+      </div>
+
+      <div class="card">
+        <h2>Configure Qwen JWT Token</h2>
+        <div id="qwenAlert"></div>
+        <div class="alert alert-info">
+          <strong>How to get your Qwen JWT token:</strong><br>
+          1. Go to <a href="https://chat.qwen.ai" target="_blank" style="color: var(--primary-hover)">chat.qwen.ai</a> and login<br>
+          2. Open DevTools (F12) → Application → Local Storage<br>
+          3. Find the <code>token</code> key and copy its value<br>
+          4. Paste it below
+        </div>
+        <div class="form-group">
+          <label>Qwen JWT Token</label>
+          <textarea id="qwenToken" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." style="font-family: monospace; font-size: 0.75rem;"></textarea>
+        </div>
+        <button onclick="saveQwenCredentials()">Save Token</button>
+      </div>
+
+      <div class="card">
+        <h2>Current Token</h2>
+        <div id="currentToken" style="font-family: monospace; font-size: 0.75rem; word-break: break-all; color: var(--text-muted);">
+          No token
+        </div>
+      </div>
+    </div>
+
+    <!-- Models -->
+    <div id="models" class="panel">
+      <div class="card">
+        <h2>Available Models</h2>
+        <button onclick="fetchModels()" style="margin-bottom: 1rem;">Refresh Models</button>
+        <div id="modelsGrid" class="model-grid"></div>
+      </div>
+    </div>
+
+    <!-- Playground -->
+    <div id="playground" class="panel">
+      <div class="card">
+        <h2>Chat Completion Playground</h2>
+        <div class="form-group">
+          <label>Model</label>
+          <select id="playgroundModel">
+            <option value="qwen/qwen3.7-max">qwen3.7-max</option>
+            <option value="qwen/qwen3.6-plus">qwen3.6-plus</option>
+            <option value="qwen/qwen3.6-max-preview">qwen3.6-max-preview</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>System Prompt (optional)</label>
+          <textarea id="systemPrompt" placeholder="You are a helpful assistant..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>User Message</label>
+          <textarea id="userMessage" placeholder="Hello! How are you?"></textarea>
+        </div>
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="streamMode" checked> Stream response (SSE)
+          </label>
+        </div>
+        <button onclick="sendChat()">Send Request</button>
+        <button onclick="clearResponse()" class="btn-secondary">Clear</button>
+      </div>
+
+      <div class="card">
+        <h2>Response</h2>
+        <div id="streamingIndicator" class="hidden">
+          <span class="streaming-indicator"></span>
+          <span>Streaming...</span>
+        </div>
+        <div id="responseBox" class="response-box">No response yet</div>
+      </div>
+
+      <div class="card">
+        <h2>Raw Payload</h2>
+        <div class="form-group">
+          <label>Request JSON</label>
+          <textarea id="rawPayload" style="min-height: 150px;"></textarea>
+        </div>
+        <button onclick="sendRawPayload()">Send Raw Payload</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let token = localStorage.getItem('hubia_token');
+    let requestCount = 0;
+
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab).classList.add('active');
+      });
+    });
+
+    // Update UI on load
+    function updateUI() {
+      document.getElementById('currentToken').textContent = token || 'No token';
+      document.getElementById('tokenStatus').textContent = token ? '✓ Active' : '✗ None';
+      if (token) {
+        fetchModels();
+      }
+    }
+
+    // Login
+    async function login() {
+      const username = document.getElementById('loginUsername').value;
+      const password = document.getElementById('loginPassword').value;
+      
+      if (!username || !password) {
+        showAlert('loginAlert', 'Username and password required', 'error');
+        return;
+      }
+
+      try {
+        const resp = await fetch('/v1/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await resp.json();
+        
+        if (resp.ok) {
+          token = data.token;
+          localStorage.setItem('hubia_token', token);
+          showAlert('loginAlert', 'Login successful!', 'success');
+          updateUI();
+        } else {
+          showAlert('loginAlert', data.error || 'Login failed', 'error');
+        }
+      } catch (err) {
+        showAlert('loginAlert', 'Network error', 'error');
+      }
+    }
+
+    // Save Qwen credentials
+    async function saveQwenCredentials() {
+      if (!token) {
+        showAlert('qwenAlert', 'Please login first', 'error');
+        return;
+      }
+
+      const qwenToken = document.getElementById('qwenToken').value.trim();
+      
+      if (!qwenToken) {
+        showAlert('qwenAlert', 'JWT token required', 'error');
+        return;
+      }
+
+      try {
+        const resp = await fetch('/v1/auth/qwen', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ token: qwenToken })
+        });
+
+        const data = await resp.json();
+        
+        if (resp.ok) {
+          showAlert('qwenAlert', 'Qwen JWT token saved!', 'success');
+        } else {
+          showAlert('qwenAlert', data.error || 'Failed to save token', 'error');
+        }
+      } catch (err) {
+        showAlert('qwenAlert', 'Network error', 'error');
+      }
+    }
+
+    // Fetch models
+    async function fetchModels() {
+      if (!token) {
+        document.getElementById('modelsGrid').innerHTML = '<div class="alert alert-error">Please login first</div>';
+        return;
+      }
+
+      try {
+        const resp = await fetch('/v1/models', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await resp.json();
+        const models = data.data || [];
+        
+        document.getElementById('modelCount').textContent = models.length;
+        
+        const grid = document.getElementById('modelsGrid');
+        grid.innerHTML = models.map(m => `
+          <div class="model-card" onclick="selectModel('${m.id}')">
+            <div class="model-name">${m.id}</div>
+            <div class="model-desc">${m.owned_by}</div>
+          </div>
+        `).join('');
+
+        // Update playground select
+        const select = document.getElementById('playgroundModel');
+        select.innerHTML = models.map(m => 
+          `<option value="${m.id}">${m.id}</option>`
+        ).join('');
+      } catch (err) {
+        document.getElementById('modelsGrid').innerHTML = '<div class="alert alert-error">Failed to fetch models</div>';
+      }
+    }
+
+    function selectModel(modelId) {
+      document.getElementById('playgroundModel').value = modelId;
+      document.querySelector('[data-tab="playground"]').click();
+    }
+
+    // Send chat
+    async function sendChat() {
+      if (!token) {
+        alert('Please login first');
+        return;
+      }
+
+      const model = document.getElementById('playgroundModel').value;
+      const systemPrompt = document.getElementById('systemPrompt').value;
+      const userMessage = document.getElementById('userMessage').value;
+      const stream = document.getElementById('streamMode').checked;
+
+      console.log('Sending chat request:', { model, stream, userMessage });
+
+      if (!userMessage) {
+        alert('Please enter a message');
+        return;
+      }
+
+      const messages = [];
+      if (systemPrompt) {
+        messages.push({ role: 'system', content: systemPrompt });
+      }
+      messages.push({ role: 'user', content: userMessage });
+
+      const payload = { model, messages, stream };
+      console.log('Payload:', payload);
+      document.getElementById('rawPayload').value = JSON.stringify(payload, null, 2);
+
+      requestCount++;
+      document.getElementById('requestCount').textContent = requestCount;
+
+      const responseBox = document.getElementById('responseBox');
+      responseBox.textContent = '';
+
+      if (stream) {
+        document.getElementById('streamingIndicator').classList.remove('hidden');
+        
+        try {
+          const resp = await fetch('/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(payload)
+          });
+
+          if (!resp.ok) {
+            const err = await resp.json();
+            responseBox.textContent = `Error: ${err.error?.message || 'Unknown error'}`;
+            document.getElementById('streamingIndicator').classList.add('hidden');
+            return;
+          }
+
+          const reader = resp.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.substring(6);
+                console.log('SSE line:', data);
+                if (data === '[DONE]') {
+                  document.getElementById('streamingIndicator').classList.add('hidden');
+                  return;
+                }
+                try {
+                  const parsed = JSON.parse(data);
+                  console.log('Parsed chunk:', parsed);
+                  const content = parsed.choices?.[0]?.delta?.content;
+                  if (content) {
+                    responseBox.textContent += content;
+                  }
+                } catch (e) {
+                  console.error('Parse error:', e, 'Data:', data);
+                }
+              }
+            }
+          }
+        } catch (err) {
+          responseBox.textContent = `Error: ${err.message}`;
+        } finally {
+          document.getElementById('streamingIndicator').classList.add('hidden');
+        }
+      } else {
+        try {
+          const resp = await fetch('/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(payload)
+          });
+
+          const data = await resp.json();
+          
+          if (resp.ok) {
+            responseBox.textContent = data.choices?.[0]?.message?.content || JSON.stringify(data, null, 2);
+          } else {
+            responseBox.textContent = `Error: ${data.error?.message || 'Unknown error'}`;
+          }
+        } catch (err) {
+          responseBox.textContent = `Error: ${err.message}`;
+        }
+      }
+    }
+
+    // Send raw payload
+    async function sendRawPayload() {
+      if (!token) {
+        alert('Please login first');
+        return;
+      }
+
+      const rawPayload = document.getElementById('rawPayload').value;
+      
+      try {
+        const payload = JSON.parse(rawPayload);
+        
+        requestCount++;
+        document.getElementById('requestCount').textContent = requestCount;
+
+        const responseBox = document.getElementById('responseBox');
+        responseBox.textContent = '';
+
+        const resp = await fetch('/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await resp.json();
+        responseBox.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        responseBox.textContent = `Error: ${err.message}`;
+      }
+    }
+
+    function clearResponse() {
+      document.getElementById('responseBox').textContent = 'No response yet';
+    }
+
+    function showAlert(elementId, message, type) {
+      const el = document.getElementById(elementId);
+      el.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+      setTimeout(() => { el.innerHTML = ''; }, 5000);
+    }
+
+    // Initialize
+    updateUI();
+  </script>
+</body>
+</html>

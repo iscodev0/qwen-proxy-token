@@ -1,6 +1,6 @@
-"""Qwen Chat provider — REST client using Scrapling Fetcher.
+"""Qwen Chat provider — REST client using Bearer JWT authentication.
 
-Authenticates via browser cookies to chat.qwen.ai.
+Authenticates via email/password to obtain JWT token from chat.qwen.ai.
 Supports SSE streaming and non-streaming chat completion.
 
 Features:
@@ -9,54 +9,21 @@ Features:
     - Thinking/reasoning mode
     - Web search tool
     - Code interpreter tool
-    - Multiple chat modes
-
-Chat Management:
-    The provider automatically creates a new chat for each request using
-    the Qwen API endpoint POST /api/v2/chats/new. This ensures that each
-    request uses the correct model and avoids context pollution.
-    
-    If you want to reuse an existing chat (e.g., for conversation continuity),
-    set the QWEN_CHAT_ID environment variable with a valid chat_id from your account.
-    
-    To get a chat_id manually:
-    1. Go to https://chat.qwen.ai/ and send any message
-    2. Run: python get_chat_id.py
-    3. Copy the chat_id and set: export QWEN_CHAT_ID="your-chat-id"
-
-System Prompts:
-    The provider supports OpenAI-compatible system prompts. If the first message
-    in the request has role='system', it will be used as the system prompt for
-    the conversation.
-    
-    Example:
-        messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": "Hello!"}
-        ]
-
-Tools and Features:
-    Configure via environment variables:
-    
-    - QWEN_CHAT_MODE: Chat mode ("normal", "thinking", "search", "code")
-    - QWEN_ENABLE_THINKING: Enable thinking/reasoning (default: "true")
-    - QWEN_ENABLE_SEARCH: Enable web search tool (default: "false")
-    - QWEN_ENABLE_CODE_INTERPRETER: Enable code interpreter (default: "false")
-    
-    Example:
-        export QWEN_ENABLE_SEARCH="true"
-        export QWEN_CHAT_MODE="search"
+    - Dynamic model list from API
+    - Auto token refresh
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 import uuid
 from collections.abc import AsyncIterator
+from datetime import datetime, timedelta
 from typing import Any
+
+import httpx
 
 from hubia.core.provider import (
     AIProvider,
@@ -70,32 +37,17 @@ from hubia.core.provider import (
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Custom exceptions
-# ---------------------------------------------------------------------------
-
-
 class QwenSessionExpiredError(Exception):
-    """Raised when the Qwen session cookies are expired."""
+    """Raised when the Qwen JWT token is expired."""
 
 
 class QwenProviderError(Exception):
     """Raised on upstream API errors after retries are exhausted."""
 
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
 QWEN_BASE_URL = "https://chat.qwen.ai"
 QWEN_API_URL = f"{QWEN_BASE_URL}/api/v2"
-
-# Local model ID → Qwen internal model parameter mapping
-MODEL_MAP: dict[str, str] = {
-    "qwen3.7-max": "qwen3.7-max",
-    "qwen3.6-plus": "qwen3.6-plus",
-    "qwen3.6-max-preview": "qwen3.6-max-preview",
-}
+QWEN_AUTH_URL = f"{QWEN_BASE_URL}/api/v1/auth/login"
 
 _DEFAULT_HEADERS = {
     "User-Agent": (
@@ -103,7 +55,7 @@ _DEFAULT_HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/131.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/event-stream, application/json",
+    "Accept": "application/json",
     "Accept-Language": "en-US,en;q=0.9",
     "Content-Type": "application/json",
     "Origin": QWEN_BASE_URL,
@@ -117,57 +69,142 @@ _DEFAULT_HEADERS = {
 
 
 class QwenChatProvider(AIProvider):
-    """Provider for Qwen's web chat API.
+    """Provider for Qwen's web chat API using Bearer JWT authentication.
 
-    Uses :class:`scrapling.fetchers.AsyncFetcher` for HTTP requests with
-    TLS fingerprint impersonation.
-
-    Credentials must contain a ``cookies`` dict with all browser cookies
-    (token, acw_tc, aui, cna, etc.) for cookie-based authentication.
+    Credentials must contain email and password for JWT token acquisition.
+    Token is cached and auto-refreshed when expired.
     """
 
     def __init__(self, retries: int = 2) -> None:
         self._retries = retries
+        self._token: str | None = None
+        self._token_expiry: datetime | None = None
+        self._models_cache: list[ModelInfo] | None = None
+        self._models_cache_time: datetime | None = None
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _build_cookie_header(cookies: dict) -> str:
-        """Build Cookie header from cookies dict."""
-        return "; ".join(f"{k}={v}" for k, v in cookies.items())
-
-    @staticmethod
-    def _get_cookies(credentials: ProviderCredentials) -> dict:
-        """Extract cookies from credentials data."""
-        data = credentials.data
-        # Support both {cookies: {...}} and flat {token: ..., acw_tc: ...} formats
-        if "cookies" in data and isinstance(data["cookies"], dict):
-            return data["cookies"]
-        # Flat format — all keys are cookies
-        return {k: v for k, v in data.items() if isinstance(v, str)}
-
-    @staticmethod
-    def _build_model_list() -> list[ModelInfo]:
-        models: list[ModelInfo] = []
-        for model_id in MODEL_MAP:
-            models.append(
-                ModelInfo(
-                    id=f"qwen/{model_id}",
-                    provider="qwen_chat",
-                    description=f"Qwen model: {model_id}",
-                )
+    async def _login(self, email: str, password: str) -> str:
+        """Authenticate with Qwen and return JWT token."""
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                QWEN_AUTH_URL,
+                json={"email": email, "password": password},
+                headers=_DEFAULT_HEADERS,
             )
-        return models
+            
+            if response.status_code != 200:
+                raise QwenProviderError(
+                    f"Qwen login failed (HTTP {response.status_code}): {response.text[:200]}"
+                )
+            
+            data = response.json()
+            token = data.get("token") or data.get("data", {}).get("token")
+            
+            if not token:
+                raise QwenProviderError("Qwen login response missing token")
+            
+            self._token = token
+            self._token_expiry = datetime.now() + timedelta(days=29)
+            
+            logger.info("Qwen login successful, token expires in 29 days")
+            return token
 
-    @staticmethod
-    def _resolve_model(model_id: str) -> str:
-        """Map a local model ID to Qwen's internal model parameter.
+    async def _ensure_token(self, credentials: ProviderCredentials) -> str:
+        """Ensure we have a valid token, refreshing if needed."""
+        data = credentials.data
+        email = data.get("email")
+        password = data.get("password")
+        
+        if not email or not password:
+            raise QwenProviderError("Credentials must contain 'email' and 'password'")
+        
+        if self._token and self._token_expiry and datetime.now() < self._token_expiry:
+            return self._token
+        
+        return await self._login(email, password)
 
-        Falls back to ``"qwen3.6-plus"`` when the model is not recognised.
-        """
-        return MODEL_MAP.get(model_id, "qwen3.6-plus")
+    def _get_headers(self, token: str) -> dict[str, str]:
+        """Build headers with Bearer token."""
+        headers = dict(_DEFAULT_HEADERS)
+        headers["Authorization"] = f"Bearer {token}"
+        return headers
+
+    async def _fetch_models(self, token: str) -> list[ModelInfo]:
+        """Fetch available models from Qwen API with caching."""
+        if self._models_cache and self._models_cache_time:
+            cache_age = datetime.now() - self._models_cache_time
+            if cache_age < timedelta(hours=1):
+                return self._models_cache
+        
+        headers = self._get_headers(token)
+        
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(
+                f"{QWEN_API_URL}/models",
+                headers=headers,
+            )
+            
+            if response.status_code != 200:
+                logger.warning("Failed to fetch models, using defaults")
+                return self._default_models()
+            
+            data = response.json()
+            models_data = data.get("data", {}).get("data", [])
+            
+            models = []
+            for m in models_data:
+                model_id = m.get("id")
+                if model_id:
+                    models.append(
+                        ModelInfo(
+                            id=f"qwen/{model_id}",
+                            provider="qwen_chat",
+                            description=m.get("info", {}).get("meta", {}).get("short_description", ""),
+                        )
+                    )
+            
+            self._models_cache = models
+            self._models_cache_time = datetime.now()
+            
+            logger.info(f"Cached {len(models)} models from Qwen API")
+            return models
+
+    def _default_models(self) -> list[ModelInfo]:
+        """Fallback model list if API fetch fails."""
+        return [
+            ModelInfo(id="qwen/qwen3.7-max", provider="qwen_chat", description="Qwen3.7-Max"),
+            ModelInfo(id="qwen/qwen3.6-plus", provider="qwen_chat", description="Qwen3.6-Plus"),
+            ModelInfo(id="qwen/qwen3.6-max-preview", provider="qwen_chat", description="Qwen3.6-Max-Preview"),
+        ]
+
+    async def _create_chat(self, token: str, model: str) -> str:
+        """Create a new chat session."""
+        headers = self._get_headers(token)
+        
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                f"{QWEN_API_URL}/chats/new",
+                json={
+                    "title": "New Chat",
+                    "models": [model],
+                    "chat_mode": "normal",
+                    "chat_type": "t2t",
+                    "timestamp": int(time.time() * 1000),
+                    "project_id": "",
+                },
+                headers=headers,
+            )
+            
+            if response.status_code != 200:
+                raise QwenProviderError(f"Failed to create chat: HTTP {response.status_code}")
+            
+            data = response.json()
+            chat_id = data.get("data", {}).get("id")
+            
+            if not chat_id:
+                raise QwenProviderError("Failed to create chat: no ID returned")
+            
+            logger.info(f"Created new chat: {chat_id}")
+            return chat_id
 
     def _build_chat_payload(
         self,
@@ -175,289 +212,22 @@ class QwenChatProvider(AIProvider):
         messages: list[dict],
         chat_id: str,
         stream: bool = True,
-        system_prompt: str | None = None,
-        enable_thinking: bool = True,
-        enable_search: bool = False,
-        enable_code_interpreter: bool = False,
-        chat_mode: str = "normal",
     ) -> dict[str, Any]:
-        """Build the Qwen chat completion payload.
-
-        Based on reverse-engineered request format from chat.qwen.ai.
-        
-        Note: Qwen doesn't accept system messages in the messages array.
-        If a system_prompt is provided, it will be prepended to the first
-        user message content.
-        
-        Args:
-            model: Model ID (e.g., "qwen3.7-max")
-            messages: List of message dicts with 'role' and 'content'
-            chat_id: Chat session ID
-            stream: Whether to stream the response
-            system_prompt: Optional system prompt to prepend to first user message
-            enable_thinking: Enable thinking/reasoning mode
-            enable_search: Enable web search tool
-            enable_code_interpreter: Enable code interpreter tool
-            chat_mode: Chat mode ("normal", "thinking", "search", "code")
-        
-        Returns:
-            Formatted payload dict for Qwen API
-        """
-        # Build message objects with Qwen's expected structure
+        """Build simplified chat completion payload."""
         qwen_messages = []
-        parent_id = None
         
-        # If system prompt is provided, prepend it to the first user message
-        if system_prompt and messages:
-            # Find the first user message and prepend system prompt
-            for i, msg in enumerate(messages):
-                if msg["role"] == "user":
-                    messages[i]["content"] = f"{system_prompt}\n\n{msg['content']}"
-                    break
-
-        # Process user and assistant messages (NO system messages)
-        for i, msg in enumerate(messages):
-            # Skip system messages - Qwen doesn't accept them
-            if msg["role"] == "system":
-                continue
-                
-            fid = str(uuid.uuid4())
-            next_fid = str(uuid.uuid4()) if i < len(messages) - 1 else None
-            
-            # Update parent's childrenIds
-            if qwen_messages:
-                qwen_messages[-1]["childrenIds"] = [fid]
-
-            qwen_msg: dict[str, Any] = {
-                "fid": fid,
-                "parentId": parent_id,
-                "childrenIds": [next_fid] if next_fid else [],
+        for msg in messages:
+            qwen_messages.append({
                 "role": msg["role"],
                 "content": msg["content"],
-                "user_action": "chat" if msg["role"] == "user" else "assistant",
-                "files": [],
-                "timestamp": int(time.time()),
-                "models": [model] if msg["role"] == "user" else [],
-                "chat_type": "t2t",
-                "feature_config": self._build_feature_config(
-                    enable_thinking, enable_search, enable_code_interpreter, chat_mode
-                ),
-                "extra": {"meta": {"subChatType": "t2t"}},
-                "sub_chat_type": "t2t",
-                "parent_id": parent_id,
-            }
-            qwen_messages.append(qwen_msg)
-            parent_id = fid
-
-        # Build tools list based on enabled features
-        tools = self._build_tools_list(enable_search, enable_code_interpreter)
-
-        payload: dict[str, Any] = {
+            })
+        
+        return {
             "stream": stream,
-            "version": "2.1",
-            "incremental_output": True,
             "chat_id": chat_id,
-            "chat_mode": chat_mode,
             "model": model,
-            "parent_id": None,
             "messages": qwen_messages,
-            "timestamp": int(time.time()),
         }
-        
-        # Add tools if any are enabled
-        if tools:
-            payload["tools"] = tools
-
-        # Log the final payload structure for debugging
-        logger.info(f"Built payload with {len(qwen_messages)} messages")
-        logger.info(f"Message roles: {[m['role'] for m in qwen_messages]}")
-        if system_prompt:
-            logger.info(f"System prompt length: {len(system_prompt)} chars")
-        logger.debug(f"Full payload: {json.dumps(payload, indent=2)[:2000]}")
-
-        return payload
-    
-    def _build_feature_config(
-        self,
-        enable_thinking: bool,
-        enable_search: bool,
-        enable_code_interpreter: bool,
-        chat_mode: str,
-    ) -> dict[str, Any]:
-        """Build feature configuration based on enabled tools.
-        
-        Args:
-            enable_thinking: Enable thinking/reasoning mode
-            enable_search: Enable web search
-            enable_code_interpreter: Enable code interpreter
-            chat_mode: Chat mode string
-        
-        Returns:
-            Feature config dict
-        """
-        config = {
-            "thinking_enabled": enable_thinking,
-            "output_schema": "phase",
-            "research_mode": "normal",
-            "auto_thinking": enable_thinking,
-            "thinking_mode": "Auto" if enable_thinking else "Off",
-            "thinking_format": "summary",
-            "auto_search": enable_search,
-        }
-        
-        # Add tool-specific configs
-        if enable_code_interpreter:
-            config["code_interpreter_enabled"] = True
-        
-        return config
-    
-    def _build_tools_list(
-        self,
-        enable_search: bool,
-        enable_code_interpreter: bool,
-    ) -> list[dict[str, Any]]:
-        """Build tools list for Qwen API.
-        
-        Args:
-            enable_search: Enable web search tool
-            enable_code_interpreter: Enable code interpreter tool
-        
-        Returns:
-            List of tool definitions
-        """
-        tools = []
-        
-        if enable_search:
-            tools.append({
-                "type": "function",
-                "function": {
-                    "name": "web_search",
-                    "description": "Search the web for current information",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "Search query"
-                            }
-                        },
-                        "required": ["query"]
-                    }
-                }
-            })
-        
-        if enable_code_interpreter:
-            tools.append({
-                "type": "function",
-                "function": {
-                    "name": "code_interpreter",
-                    "description": "Execute Python code",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "code": {
-                                "type": "string",
-                                "description": "Python code to execute"
-                            }
-                        },
-                        "required": ["code"]
-                    }
-                }
-            })
-        
-        return tools
-
-    async def _get_or_create_chat_id(
-        self,
-        credentials: ProviderCredentials,
-        model: str = "qwen3.6-plus",
-    ) -> str:
-        """Create a new chat or get an existing one.
-        
-        This method automatically creates a new chat for each request using
-        the Qwen API endpoint POST /api/v2/chats/new. This ensures that each
-        request uses the correct model and avoids context pollution from
-        previous conversations.
-        
-        Priority:
-        1. QWEN_CHAT_ID environment variable (if set, reuses existing chat)
-        2. Create a new chat via API (default behavior)
-        3. Fall back to most recent chat if creation fails
-        
-        Args:
-            credentials: User's Qwen cookies
-            model: Model to use for the new chat (e.g., "qwen3.7-max")
-        
-        Returns:
-            A valid chat_id to use for the request
-        """
-        # First, check if QWEN_CHAT_ID is set in environment
-        env_chat_id = os.environ.get("QWEN_CHAT_ID")
-        if env_chat_id:
-            logger.info("Using QWEN_CHAT_ID from environment: %s", env_chat_id)
-            return env_chat_id
-        
-        # Try to create a new chat
-        from scrapling.fetchers import AsyncFetcher
-
-        cookies = self._get_cookies(credentials)
-        headers = dict(_DEFAULT_HEADERS)
-        headers["Cookie"] = self._build_cookie_header(cookies)
-
-        # Create new chat
-        try:
-            create_payload = {
-                "title": "Nuevo Chat",
-                "models": [model],
-                "chat_mode": "normal",
-                "chat_type": "t2t",
-                "timestamp": int(time.time() * 1000),  # milliseconds
-                "project_id": "",
-            }
-            
-            response = await AsyncFetcher.post(
-                f"{QWEN_API_URL}/chats/new",
-                json=create_payload,
-                headers=headers,
-                impersonate="chrome131",
-                timeout=30,
-            )
-            
-            if response.status == 200:
-                data = response.json()
-                if data.get("success") and data.get("data", {}).get("id"):
-                    chat_id = data["data"]["id"]
-                    logger.info("Created new chat with id: %s", chat_id)
-                    return chat_id
-        except Exception as exc:
-            logger.warning("Failed to create chat: %s", exc)
-
-        # Fall back to listing existing chats
-        try:
-            response = await AsyncFetcher.get(
-                f"{QWEN_API_URL}/chats/",
-                headers=headers,
-                impersonate="chrome131",
-                timeout=30,
-            )
-            
-            if response.status == 200:
-                data = response.json()
-                chats = data.get("data", data) if isinstance(data, dict) else data
-                if isinstance(chats, list) and chats:
-                    chat_id = chats[0].get("id")
-                    if chat_id:
-                        logger.info("Using most recent chat_id: %s", chat_id)
-                        return chat_id
-        except Exception as exc:
-            logger.warning("Failed to list chats: %s", exc)
-
-        # No chats found and couldn't create one
-        raise QwenProviderError(
-            "Failed to create or find a chat.\n\n"
-            "Please create a chat manually at https://chat.qwen.ai/ and set:\n"
-            "export QWEN_CHAT_ID='your-chat-id'"
-        )
 
     async def _request(
         self,
@@ -465,36 +235,24 @@ class QwenChatProvider(AIProvider):
         json_payload: dict[str, Any],
         credentials: ProviderCredentials,
         chat_id: str | None = None,
-    ) -> Any:
-        """Execute a REST request with retry logic using httpx for SSE support.
-
-        Returns a response object with .status, .headers, and .text attributes.
-
-        Raises:
-            QwenSessionExpiredError: On HTTP 401 or 403 (expired cookies).
-            QwenProviderError: On repeated failures.
-        """
-        import httpx
-
-        cookies = self._get_cookies(credentials)
-        headers = dict(_DEFAULT_HEADERS)
-        headers["Cookie"] = self._build_cookie_header(cookies)
-
+    ) -> httpx.Response:
+        """Execute REST request with retry logic."""
+        token = await self._ensure_token(credentials)
+        headers = self._get_headers(token)
+        
         last_error: Exception | None = None
-
+        
         for attempt in range(1, self._retries + 2):
             try:
-                # Build URL with query params if chat_id is present
                 url = f"{QWEN_API_URL}/{endpoint}"
                 if chat_id:
                     url += f"?chat_id={chat_id}"
-
+                
                 async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
                     response = await client.post(
                         url,
                         json=json_payload,
                         headers=headers,
-                        cookies=cookies,
                     )
             except Exception as exc:
                 last_error = exc
@@ -506,58 +264,29 @@ class QwenChatProvider(AIProvider):
                 )
                 if attempt <= self._retries:
                     continue
-                raise QwenProviderError(
-                    f"Request failed after retries: {exc}"
-                ) from exc
-
+                raise QwenProviderError(f"Request failed after retries: {exc}") from exc
+            
             if response.status_code in (401, 403):
+                self._token = None
+                self._token_expiry = None
                 raise QwenSessionExpiredError(
-                    "Qwen session expired (HTTP %d). "
-                    "Please re-capture your cookies via /sandbox/qwen."
-                    % response.status_code
+                    f"Qwen session expired (HTTP {response.status_code}). "
+                    "Token will be refreshed on next request."
                 )
-
+            
             if response.status_code >= 500:
-                last_error = QwenProviderError(
-                    f"Qwen returned HTTP {response.status_code}"
-                )
+                last_error = QwenProviderError(f"Qwen returned HTTP {response.status_code}")
                 if attempt <= self._retries:
                     continue
                 raise last_error
-
+            
             if response.status_code != 200:
                 raise QwenProviderError(
-                    f"Qwen returned HTTP {response.status_code}: "
-                    f"{response.text[:500]}"
+                    f"Qwen returned HTTP {response.status_code}: {response.text[:500]}"
                 )
-
-            # Log response details for debugging (using print for now)
-            print(f"[DEBUG] Qwen response status: {response.status_code}")
-            print(f"[DEBUG] Qwen response headers: {dict(response.headers)}")
-            print(f"[DEBUG] Qwen response body length: {len(response.text)}")
-            print(f"[DEBUG] Qwen response body (first 1000 chars): {response.text[:1000]}")
             
-            # Log the payload we sent for debugging
-            print(f"[DEBUG] Payload sent to Qwen:")
-            print(f"[DEBUG]   - stream: {json_payload.get('stream')}")
-            print(f"[DEBUG]   - model: {json_payload.get('model')}")
-            print(f"[DEBUG]   - chat_id: {json_payload.get('chat_id')}")
-            print(f"[DEBUG]   - Number of messages: {len(json_payload.get('messages', []))}")
-            for i, msg in enumerate(json_payload.get('messages', [])):
-                print(f"[DEBUG]     Message {i}: role={msg.get('role')}, content_length={len(msg.get('content', ''))}")
-
-            # Wrap httpx response to match Scrapling interface
-            class ResponseWrapper:
-                def __init__(self, resp):
-                    self.status = resp.status_code
-                    self.headers = dict(resp.headers)
-                    self.text = resp.text
-                    
-                def json(self):
-                    return json.loads(self.text)
-            
-            return ResponseWrapper(response)
-
+            return response
+        
         raise QwenProviderError(f"Request failed: {last_error}")
 
     # ------------------------------------------------------------------
@@ -569,72 +298,51 @@ class QwenChatProvider(AIProvider):
         request: ChatRequest,
         credentials: ProviderCredentials,
     ) -> ChatResponse:
-        """Non-streaming chat completion via Qwen API.
-
-        Internally uses streaming and collects the full response.
+        """Non-streaming chat completion via Qwen API."""
+        token = await self._ensure_token(credentials)
         
-        Supports system prompts: if the first message has role='system',
-        it will be used as the system prompt for the conversation.
-        """
-        local_model = self._resolve_model(request.model)
-        chat_id = await self._get_or_create_chat_id(credentials, local_model)
-
-        # Log incoming messages for debugging
-        logger.info(f"Received {len(request.messages)} messages from client")
-        logger.info(f"Message roles: {[m.role for m in request.messages]}")
-
-        # Extract and validate system prompts
-        system_prompts = []
+        model = request.model
+        if model.startswith("qwen/"):
+            model = model[5:]
+        
+        chat_id = await self._create_chat(token, model)
+        
         messages = []
+        system_content = None
         
         for m in request.messages:
             if m.role == "system":
-                system_prompts.append(m.content)
+                system_content = m.content
             else:
                 messages.append({"role": m.role, "content": m.content})
         
-        # Combine multiple system prompts into one (Qwen only allows one)
-        system_prompt = None
-        if system_prompts:
-            system_prompt = "\n\n".join(system_prompts)
-            logger.info(f"Combined {len(system_prompts)} system prompt(s) into one")
-
-        # Get chat mode from environment or default to "normal"
-        chat_mode = os.environ.get("QWEN_CHAT_MODE", "normal")
-        enable_thinking = os.environ.get("QWEN_ENABLE_THINKING", "true").lower() == "true"
-        enable_search = os.environ.get("QWEN_ENABLE_SEARCH", "false").lower() == "true"
-        enable_code_interpreter = os.environ.get("QWEN_ENABLE_CODE_INTERPRETER", "false").lower() == "true"
-
+        if system_content and messages:
+            for i, msg in enumerate(messages):
+                if msg["role"] == "user":
+                    messages[i]["content"] = f"{system_content}\n\n{msg['content']}"
+                    break
+        
         payload = self._build_chat_payload(
-            model=local_model,
+            model=model,
             messages=messages,
             chat_id=chat_id,
-            stream=True,  # Always use streaming
-            system_prompt=system_prompt,
-            enable_thinking=enable_thinking,
-            enable_search=enable_search,
-            enable_code_interpreter=enable_code_interpreter,
-            chat_mode=chat_mode,
+            stream=False,
         )
-
+        
         response = await self._request(
             "chat/completions", payload, credentials, chat_id=chat_id
         )
-
-        # Parse SSE response and collect full content
-        body_text = getattr(response, "text", "")
-        logger.info(f"Response body length: {len(body_text)}")
-        logger.info(f"Response headers: {response.headers}")
-        logger.info(f"Response body (first 1000 chars): {body_text[:1000]}")
         
-        full_content = self._parse_sse_response(body_text)
-        logger.info(f"Parsed content length: {len(full_content)}")
-        logger.info(f"Parsed content (first 500 chars): {full_content[:500]}")
-
+        try:
+            data = response.json()
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        except Exception:
+            content = response.text
+        
         return ChatResponse(
             id=chat_id,
             model=request.model,
-            content=full_content,
+            content=content,
             finish_reason="stop",
         )
 
@@ -643,148 +351,105 @@ class QwenChatProvider(AIProvider):
         request: ChatRequest,
         credentials: ProviderCredentials,
     ) -> AsyncIterator[StreamChunk]:
-        """Streaming chat completion via Qwen API.
-
-        The upstream SSE stream is parsed and re-packaged as OpenAI SSE
-        ``StreamChunk``\\ s.
+        """Streaming chat completion via Qwen API with SSE."""
+        token = await self._ensure_token(credentials)
         
-        Supports system prompts: if the first message has role='system',
-        it will be used as the system prompt for the conversation.
-        """
-        local_model = self._resolve_model(request.model)
-        chat_id = await self._get_or_create_chat_id(credentials, local_model)
-
-        # Log incoming messages for debugging
-        logger.info(f"[STREAM] Received {len(request.messages)} messages from client")
-        logger.info(f"[STREAM] Message roles: {[m.role for m in request.messages]}")
-
-        # Extract and validate system prompts
-        system_prompts = []
+        model = request.model
+        if model.startswith("qwen/"):
+            model = model[5:]
+        
+        chat_id = await self._create_chat(token, model)
+        
         messages = []
+        system_content = None
         
         for m in request.messages:
             if m.role == "system":
-                system_prompts.append(m.content)
+                system_content = m.content
             else:
                 messages.append({"role": m.role, "content": m.content})
         
-        # Combine multiple system prompts into one (Qwen only allows one)
-        system_prompt = None
-        if system_prompts:
-            system_prompt = "\n\n".join(system_prompts)
-            logger.info(f"[STREAM] Combined {len(system_prompts)} system prompt(s) into one")
-
-        # Get chat mode from environment or default to "normal"
-        chat_mode = os.environ.get("QWEN_CHAT_MODE", "normal")
-        enable_thinking = os.environ.get("QWEN_ENABLE_THINKING", "true").lower() == "true"
-        enable_search = os.environ.get("QWEN_ENABLE_SEARCH", "false").lower() == "true"
-        enable_code_interpreter = os.environ.get("QWEN_ENABLE_CODE_INTERPRETER", "false").lower() == "true"
-
+        if system_content and messages:
+            for i, msg in enumerate(messages):
+                if msg["role"] == "user":
+                    messages[i]["content"] = f"{system_content}\n\n{msg['content']}"
+                    break
+        
         payload = self._build_chat_payload(
-            model=local_model,
+            model=model,
             messages=messages,
             chat_id=chat_id,
             stream=True,
-            system_prompt=system_prompt,
-            enable_thinking=enable_thinking,
-            enable_search=enable_search,
-            enable_code_interpreter=enable_code_interpreter,
-            chat_mode=chat_mode,
         )
-
-        response = await self._request(
-            "chat/completions", payload, credentials, chat_id=chat_id
-        )
-
-        body_text = getattr(response, "text", "")
-
-        # Parse SSE and yield chunks
-        for chunk in self._iter_sse_chunks(body_text):
-            yield chunk
-
-    def _parse_sse_response(self, body_text: str) -> str:
-        """Parse SSE response and return full content."""
-        content_parts = []
-
-        for line in body_text.split("\n"):
-            line = line.strip()
-            if not line.startswith("data: "):
-                continue
-
-            data_str = line[6:]
-            if data_str == "[DONE]":
-                break
-
-            try:
-                data = json.loads(data_str)
-                # Qwen SSE format: {"choices": [{"delta": {"content": "..."}}]}
-                choices = data.get("choices", [])
-                if choices:
-                    delta = choices[0].get("delta", {})
-                    # Check for content in different possible fields
-                    text = delta.get("content", "")
-                    # Also check for 'text' field as fallback
-                    if not text:
-                        text = delta.get("text", "")
-                    # Check for phase-based content
-                    if not text and "phase" in delta:
-                        phase = delta.get("phase")
-                        if phase == "answer":
-                            text = delta.get("content", "")
+        
+        headers = self._get_headers(token)
+        url = f"{QWEN_API_URL}/chat/completions?chat_id={chat_id}"
+        
+        async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
+            async with client.stream("POST", url, json=payload, headers=headers) as response:
+                if response.status_code in (401, 403):
+                    self._token = None
+                    self._token_expiry = None
+                    raise QwenSessionExpiredError(
+                        f"Qwen session expired (HTTP {response.status_code})"
+                    )
+                
+                if response.status_code != 200:
+                    body = await response.aread()
+                    raise QwenProviderError(
+                        f"Qwen returned HTTP {response.status_code}: {body.decode()[:500]}"
+                    )
+                
+                async for line in response.aiter_lines():
+                    line = line.strip()
+                    if not line.startswith("data: "):
+                        continue
                     
-                    if text:
-                        content_parts.append(text)
-            except json.JSONDecodeError:
-                continue
-
-        return "".join(content_parts)
-
-    def _iter_sse_chunks(self, body_text: str) -> AsyncIterator[StreamChunk]:
-        """Parse SSE response and yield StreamChunks."""
-        for line in body_text.split("\n"):
-            line = line.strip()
-            if not line.startswith("data: "):
-                continue
-
-            data_str = line[6:]
-            if data_str == "[DONE]":
-                yield StreamChunk(content="", finish_reason="stop")
-                return
-
-            try:
-                data = json.loads(data_str)
-                choices = data.get("choices", [])
-                if choices:
-                    delta = choices[0].get("delta", {})
-                    text = delta.get("content", "")
-                    finish = choices[0].get("finish_reason")
-                    if text:
-                        yield StreamChunk(content=text, finish_reason=None)
-                    if finish:
-                        yield StreamChunk(content="", finish_reason=finish)
+                    data_str = line[6:]
+                    if data_str == "[DONE]":
+                        yield StreamChunk(content="", finish_reason="stop")
                         return
-            except json.JSONDecodeError:
-                continue
-
-        # If we get here without [DONE], yield stop
+                    
+                    try:
+                        data = json.loads(data_str)
+                        choices = data.get("choices", [])
+                        if choices:
+                            delta = choices[0].get("delta", {})
+                            text = delta.get("content", "") or delta.get("text", "")
+                            finish = choices[0].get("finish_reason")
+                            
+                            if text:
+                                yield StreamChunk(content=text, finish_reason=None)
+                            if finish:
+                                yield StreamChunk(content="", finish_reason=finish)
+                                return
+                    except json.JSONDecodeError:
+                        continue
+        
         yield StreamChunk(content="", finish_reason="stop")
 
     async def list_models(self) -> list[ModelInfo]:
         """Return Qwen models available through this provider."""
-        return self._build_model_list()
+        if self._models_cache:
+            return self._models_cache
+        return self._default_models()
 
     async def validate_credentials(
         self,
         credentials: ProviderCredentials,
     ) -> bool:
-        """Check if credentials contain valid-looking cookies.
-
-        Validates that the cookies dict has a 'token' field with reasonable length.
-        """
-        cookies = self._get_cookies(credentials)
-        if not cookies:
+        """Check if credentials contain valid email and password."""
+        data = credentials.data
+        email = data.get("email")
+        password = data.get("password")
+        
+        if not email or not password:
             return False
-        token = cookies.get("token", "")
-        if not token or not isinstance(token, str) or len(token) < 20:
+        
+        if not isinstance(email, str) or not isinstance(password, str):
             return False
+        
+        if len(email) < 5 or len(password) < 6:
+            return False
+        
         return True
