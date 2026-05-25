@@ -1,17 +1,11 @@
-"""Provider implementations: Meta AI and Z.ai Web."""
+"""Provider implementations: Qwen Chat."""
 
-from hubia.providers.meta_ai import (
-    MetaAIProvider,
-    SessionExpiredError as MetaSessionExpiredError,
-)
-from hubia.providers.zai_web import (
-    ZaiWebProvider,
-    SessionExpiredError as ZaiSessionExpiredError,
+from hubia.providers.qwen_chat import (
+    QwenChatProvider,
+    QwenSessionExpiredError,
 )
 
 __all__ = [
-    "MetaAIProvider",
-    "ZaiWebProvider",
-    "MetaSessionExpiredError",
-    "ZaiSessionExpiredError",
+    "QwenChatProvider",
+    "QwenSessionExpiredError",
 ]

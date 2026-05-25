@@ -71,7 +71,7 @@ class MockMetaAIProvider(AIProvider):
         yield StreamChunk(content="response", finish_reason="stop")
 
     async def list_models(self) -> list[ModelInfo]:
-        return [ModelInfo(id="meta-ai/llama-3", provider="meta_ai")]
+        return [ModelInfo(id="meta-ai/muse-spark", provider="meta_ai")]
 
     async def validate_credentials(
         self,

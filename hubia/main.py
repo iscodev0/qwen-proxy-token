@@ -1,4 +1,4 @@
-"""Hubia FastAPI application — main entry point."""
+"""Qwen Proxy FastAPI application — main entry point."""
 
 from __future__ import annotations
 
@@ -13,8 +13,7 @@ from hubia.config import settings
 from hubia.api.errors import register_error_handlers
 from hubia.api.router import api_router
 from hubia.core.registry import ProviderRegistry
-from hubia.providers.meta_ai import MetaAIProvider
-from hubia.providers.zai_web import ZaiWebProvider
+from hubia.providers.qwen_chat import QwenChatProvider
 from hubia.store.database import close_db, init_db
 
 _registry: ProviderRegistry | None = None
@@ -40,8 +39,7 @@ async def lifespan(app: FastAPI):
 
     global _registry  # noqa: PLW0603
     _registry = ProviderRegistry()
-    _registry.register("meta_ai", MetaAIProvider(), ["meta-ai/"])
-    _registry.register("zai_web", ZaiWebProvider(), ["zai/"])
+    _registry.register("qwen_chat", QwenChatProvider(), ["qwen/"])
 
     # Pass registry to v1 routes
     from hubia.api.v1_routes import set_registry
@@ -59,8 +57,8 @@ async def lifespan(app: FastAPI):
 # ---------------------------------------------------------------------------
 
 app = FastAPI(
-    title="Hubia API Hub",
-    description="OpenAI-compatible API proxy for Meta AI and Z.ai",
+    title="Qwen Proxy API",
+    description="OpenAI-compatible API proxy for Qwen AI",
     version="0.1.0",
     lifespan=lifespan,
 )

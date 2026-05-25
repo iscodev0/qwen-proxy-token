@@ -1,7 +1,7 @@
 """Cookie / session-token capture using Scrapling StealthyFetcher.
 
 Provides interactive browser-based capture (visible browser, user logs in
-manually) and manual credential input flows for Meta AI and Z.ai.
+manually) and manual credential input flows for Meta AI, Qwen, and Z.ai.
 
 Security note: The interactive flow opens a VISIBLE browser on the server
 machine.  The user logs in with THEIR OWN credentials using the real
@@ -245,6 +245,111 @@ async def validate_zai_token(token: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Qwen cookies capture — interactive (all cookies needed)
+# ---------------------------------------------------------------------------
+
+
+async def capture_qwen_cookies_interactive(
+    stop_event: asyncio.Event | None = None,
+) -> dict:
+    """Open a visible browser and let the user log into Qwen manually.
+
+    The function opens a non-headless browser pointed at ``https://
+    chat.qwen.ai/`` and polls for cookies every *2 s*.
+    Qwen requires ALL cookies (token, acw_tc, aui, cna, etc.) for authentication.
+
+    Returns:
+        A dict with:
+        - ``status``: ``"ok"`` or ``"error"``.
+        - ``cookies``: dict with all cookies (on success).
+        - ``error``: Error message (on failure).
+        - ``mock``: ``True`` if mock data was returned.
+    """
+    try:
+        from scrapling.fetchers import StealthyFetcher
+    except ImportError:
+        logger.warning("StealthyFetcher not available — returning mock cookies")
+        return _mock_qwen_cookies()
+
+    logger.info("Starting interactive Qwen cookies capture (headless=False)")
+
+    async with StealthyFetcher(headless=False) as fetcher:
+        await fetcher.goto("https://chat.qwen.ai/")
+
+        deadline = asyncio.get_event_loop().time() + _CAPTURE_TIMEOUT_S
+
+        while True:
+            if stop_event is not None and stop_event.is_set():
+                logger.info("Stop event set — extracting cookies now")
+                break
+
+            if asyncio.get_event_loop().time() > deadline:
+                logger.warning("Interactive capture timed out after %ds", _CAPTURE_TIMEOUT_S)
+                return {
+                    "status": "error",
+                    "error": f"Capture timed out after {_CAPTURE_TIMEOUT_S} seconds. "
+                    "Please try again.",
+                }
+
+            # Poll for cookies
+            try:
+                cookies = await fetcher.get_cookies()
+            except Exception:
+                logger.exception("Error polling cookies — browser may have been closed")
+                cookies = {}
+
+            # Check if we have the required 'token' cookie
+            token = cookies.get("token", "")
+            if token and len(token) >= 20:
+                # Also check for other important cookies
+                has_acw = "acw_tc" in cookies
+                has_aui = "aui" in cookies
+                if has_acw or has_aui:
+                    logger.info("Session cookies detected — capture successful")
+                    logger.info(f"Captured {len(cookies)} cookies: {list(cookies.keys())}")
+                    return {
+                        "cookies": dict(cookies),
+                        "status": "ok",
+                    }
+
+            await asyncio.sleep(_POLL_INTERVAL_S)
+
+        # Broke out via stop_event — final attempt
+        try:
+            cookies = await fetcher.get_cookies()
+        except Exception:
+            cookies = {}
+
+        token = cookies.get("token", "")
+        if not token or len(token) < 20:
+            return {
+                "status": "error",
+                "error": "Session cookies not found. Please log in to Qwen first.",
+            }
+
+        return {
+            "cookies": dict(cookies),
+            "status": "ok",
+        }
+
+
+async def validate_qwen_cookies(cookies: dict) -> dict:
+    """Validate that the cookies dict contains required Qwen cookies.
+
+    Returns:
+        A dict with ``valid`` (bool) and optionally ``error`` (str).
+    """
+    if not cookies or not isinstance(cookies, dict):
+        return {"valid": False, "error": "Cookies must be a non-empty dict"}
+
+    token = cookies.get("token", "")
+    if not token or not isinstance(token, str) or len(token) < 20:
+        return {"valid": False, "error": "Missing or invalid 'token' cookie (min 20 chars)"}
+
+    return {"valid": True}
+
+
+# ---------------------------------------------------------------------------
 # Development mocks (used when StealthyFetcher is not installed)
 # ---------------------------------------------------------------------------
 
@@ -265,6 +370,20 @@ def _mock_zai_token() -> dict:
     """Return a mock JWT for development when StealthyFetcher is absent."""
     return {
         "token": "mock_jwt_token_for_development_only",
+        "status": "ok",
+        "mock": True,
+    }
+
+
+def _mock_qwen_cookies() -> dict:
+    """Return mock cookies for development when StealthyFetcher is absent."""
+    return {
+        "cookies": {
+            "token": "mock_qwen_jwt_token_for_development_only_value_12345",
+            "acw_tc": "mock_acw_tc_value",
+            "aui": "mock_aui_user_id",
+            "cna": "mock_cna_value",
+        },
         "status": "ok",
         "mock": True,
     }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Hubia — API Hub</title>
+<title>Qwen Proxy — OpenAI-compatible API for Qwen AI</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
 tailwind.config = {
@@ -12,7 +12,6 @@ tailwind.config = {
 };
 </script>
 <style>
-  /* Transitions and animations */
   .fade-in { animation: fadeIn 0.2s ease-in; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   .spinner { animation: spin 1s linear infinite; }
@@ -25,12 +24,6 @@ tailwind.config = {
     flex-shrink: 0;
   }
   .step-num.active { background: #2563eb; color: #fff; }
-  .polling-dot {
-    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-    background: #9ca3af; margin: 0 2px;
-  }
-  .polling-dot.active { background: #2563eb; animation: pulse 1.5s ease-in-out infinite; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
   code, pre { font-family: "SF Mono","Fira Code","Fira Mono",Menlo,Consolas,monospace; }
   .tab-btn.active {
     color: #2563eb; border-bottom-color: #2563eb;
@@ -41,7 +34,6 @@ tailwind.config = {
     max-width: 24rem; transition: all 0.3s ease;
   }
   .toast-enter { opacity: 0; transform: translateY(1rem); }
-  /* Scrollbar styling for response areas */
   .response-area::-webkit-scrollbar { width: 6px; }
   .response-area::-webkit-scrollbar-track { background: transparent; }
   .response-area::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
@@ -49,103 +41,20 @@ tailwind.config = {
 </head>
 <body class="bg-gray-50 text-gray-900 antialiased min-h-screen">
 
-<!-- ============================================================
-     Toast Container
-     ============================================================ -->
+<!-- Toast Container -->
 <div id="toastContainer" class="toast toast-enter"></div>
 
-<!-- ============================================================
-     Auth Section (shown when not logged in)
-     ============================================================ -->
-<div id="authSection" class="min-h-screen flex items-center justify-center px-4 py-12">
-  <div class="w-full max-w-md">
-    <div class="text-center mb-8">
-      <h1 class="text-3xl font-bold text-gray-900">Hubia</h1>
-      <p class="mt-2 text-sm text-gray-500">AI API Hub — OpenAI-compatible access to Meta AI and Z.ai</p>
-    </div>
-
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200">
-      <!-- Auth tabs -->
-      <div class="flex border-b border-gray-200">
-        <button id="authTabLogin" onclick="switchAuthTab('login')"
-                class="flex-1 px-4 py-3 text-sm font-medium text-center border-b-2 transition-colors tab-btn active"
-                style="border-bottom-color:#2563eb;color:#2563eb;">
-          Log In
-        </button>
-        <button id="authTabRegister" onclick="switchAuthTab('register')"
-                class="flex-1 px-4 py-3 text-sm font-medium text-center border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition-colors tab-btn">
-          Register
-        </button>
-      </div>
-
-      <!-- Login form -->
-      <div id="loginForm" class="p-6 space-y-4 fade-in">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
-          <input id="loginUsername" type="text" autocomplete="username" placeholder="Enter your username"
-                 class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
-          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Enter your password"
-                 class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
-        </div>
-        <button onclick="login()"
-                class="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-          Log In
-        </button>
-        <p id="loginError" class="text-sm text-red-600 hidden"></p>
-      </div>
-
-      <!-- Register form -->
-      <div id="registerForm" class="p-6 space-y-4 fade-in" style="display:none;">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
-          <input id="regUsername" type="text" autocomplete="username" placeholder="Choose a username (min 3 chars)"
-                 class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
-          <input id="regPassword" type="password" autocomplete="new-password" placeholder="Min 8 characters"
-                 class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
-          <input id="regConfirm" type="password" autocomplete="new-password" placeholder="Repeat password"
-                 class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all">
-        </div>
-        <button onclick="register()"
-                class="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-          Create Account
-        </button>
-        <p id="regError" class="text-sm text-red-600 hidden"></p>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ============================================================
-     Main App Section (shown when logged in)
-     ============================================================ -->
-<div id="appSection" class="min-h-screen" style="display:none;">
+<!-- Main App (no login required) -->
+<div id="appSection" class="min-h-screen">
 
   <!-- Header -->
   <header class="bg-white border-b border-gray-200 shadow-sm">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-14">
         <div class="flex items-center gap-3">
-          <h1 class="text-lg font-bold text-gray-900">Hubia</h1>
+          <h1 class="text-lg font-bold text-gray-900">Qwen Proxy</h1>
           <span class="hidden sm:inline text-sm text-gray-400">|</span>
-          <span class="hidden sm:inline text-sm text-gray-500">AI API Hub</span>
-        </div>
-        <div class="flex items-center gap-4">
-          <span class="text-sm text-gray-600">
-            Logged in as <span id="appUsername" class="font-semibold text-gray-900"></span>
-          </span>
-          <button onclick="logout()"
-                  class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors">
-            Logout
-          </button>
+          <span class="hidden sm:inline text-sm text-gray-500">OpenAI-compatible API for Qwen AI</span>
         </div>
       </div>
     </div>
@@ -177,96 +86,72 @@ tailwind.config = {
 
   <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
-    <!-- ================================================================
-         Tab: Dashboard
-         ================================================================ -->
+    <!-- Tab: Dashboard -->
     <div id="dashboardTab" class="space-y-6 fade-in">
 
       <!-- Welcome -->
       <div class="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-6 text-white shadow-sm">
-        <h2 class="text-xl font-bold">Welcome, <span id="dashboardUsername"></span>!</h2>
-        <p class="mt-1 text-blue-100 text-sm">Manage your API keys, capture provider credentials, and test the API — all from your browser.</p>
+        <h2 class="text-xl font-bold">Welcome to Qwen Proxy!</h2>
+        <p class="mt-1 text-blue-100 text-sm">Access Qwen AI models through an OpenAI-compatible API. Set up your credentials and start using the API in minutes.</p>
       </div>
 
-      <!-- Stats grid -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <!-- Quick start guide -->
+      <div class="rounded-xl bg-white border border-gray-200 shadow-sm p-5">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Quick Start</h3>
+        <ol class="space-y-2 text-sm text-gray-600">
+          <li class="flex items-start gap-2">
+            <span class="step-num">1</span>
+            <span>Go to <strong>Credentials</strong> tab and set up your Qwen cookies.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="step-num">2</span>
+            <span>Use the <strong>API Playground</strong> to test the API interactively.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="step-num">3</span>
+            <span>Check <strong>API Examples</strong> for curl/Python/JavaScript code snippets.</span>
+          </li>
+        </ol>
+      </div>
 
-        <!-- Stored credentials -->
-        <div class="rounded-xl bg-white border border-gray-200 shadow-sm p-5">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="text-sm font-semibold text-gray-700">Stored Credentials</h3>
-            <span class="text-2xl" id="credCount">0</span>
-          </div>
-          <div class="space-y-2 text-sm">
-            <div class="flex items-center gap-2">
-              <span id="metaStatusBadge" class="inline-block h-2.5 w-2.5 rounded-full bg-gray-300"></span>
-              <span class="text-gray-600">Meta AI</span>
-              <span id="metaStatusLabel" class="text-xs text-gray-400">—</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <span id="zaiStatusBadge" class="inline-block h-2.5 w-2.5 rounded-full bg-gray-300"></span>
-              <span class="text-gray-600">Z.ai</span>
-              <span id="zaiStatusLabel" class="text-xs text-gray-400">—</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- API Key -->
-        <div class="rounded-xl bg-white border border-gray-200 shadow-sm p-5">
-          <h3 class="text-sm font-semibold text-gray-700 mb-3">API Key</h3>
-          <div id="apiKeyDisplay" class="hidden">
-            <div class="flex items-center gap-2 mb-2">
-              <code id="apiKeyPreview" class="flex-1 truncate bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs font-mono"></code>
-              <button onclick="copyApiKey()" title="Copy API Key"
-                      class="shrink-0 rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-                Copy
-              </button>
-            </div>
-            <p class="text-xs text-gray-400">Use this as the Bearer token in API requests.</p>
-          </div>
-          <button id="generateKeyBtn" onclick="generateApiKey()"
-                  class="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors">
-            Generate API Key
-          </button>
-          <p id="apiKeyStatus" class="text-xs text-gray-400 mt-2 hidden"></p>
-        </div>
-
-        <!-- Quick links -->
-        <div class="rounded-xl bg-white border border-gray-200 shadow-sm p-5 sm:col-span-2 lg:col-span-1">
-          <h3 class="text-sm font-semibold text-gray-700 mb-3">Quick Links</h3>
-          <ul class="space-y-2 text-sm">
-            <li>
-              <button onclick="switchTab('credentials')" class="text-blue-600 hover:text-blue-700 transition-colors">
-                → Manage credentials
-              </button>
-            </li>
-            <li>
-              <button onclick="switchTab('playground')" class="text-blue-600 hover:text-blue-700 transition-colors">
-                → Try the API playground
-              </button>
-            </li>
-            <li>
-              <button onclick="switchTab('examples')" class="text-blue-600 hover:text-blue-700 transition-colors">
-                → View API examples
-              </button>
-            </li>
-          </ul>
-        </div>
+      <!-- Quick links -->
+      <div class="rounded-xl bg-white border border-gray-200 shadow-sm p-5">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Quick Links</h3>
+        <ul class="space-y-2 text-sm">
+          <li>
+            <button onclick="switchTab('credentials')" class="text-blue-600 hover:text-blue-700 transition-colors">
+              Set up Qwen credentials
+            </button>
+          </li>
+          <li>
+            <button onclick="switchTab('playground')" class="text-blue-600 hover:text-blue-700 transition-colors">
+              Try the API playground
+            </button>
+          </li>
+          <li>
+            <button onclick="switchTab('examples')" class="text-blue-600 hover:text-blue-700 transition-colors">
+              View API examples
+            </button>
+          </li>
+          <li>
+            <a href="/docs" class="text-blue-600 hover:text-blue-700 transition-colors">
+              OpenAPI documentation
+            </a>
+          </li>
+        </ul>
       </div>
     </div>
 
-    <!-- ================================================================
-         Tab: Credentials (Sandbox)
-         ================================================================ -->
+    <!-- Tab: Credentials -->
     <div id="credentialsTab" class="space-y-6 fade-in" style="display:none;">
 
-      <!-- Meta AI Card -->
-      <div id="metaAiCard" class="rounded-xl border border-gray-200 bg-white shadow-sm">
+      <!-- Qwen Card -->
+      <div id="qwenCard" class="rounded-xl border border-gray-200 bg-white shadow-sm">
         <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-          <h2 class="text-lg font-semibold text-gray-900">Meta AI</h2>
+          <h2 class="text-lg font-semibold text-gray-900">Qwen</h2>
           <div class="flex items-center gap-2 text-sm">
-            <span id="metaStatusCredDot" class="inline-block h-2.5 w-2.5 rounded-full bg-gray-300"></span>
-            <span id="metaStatusCredText" class="text-gray-500">No credentials</span>
+            <span id="qwenStatusCredDot" class="inline-block h-2.5 w-2.5 rounded-full bg-gray-300"></span>
+            <span id="qwenStatusCredText" class="text-gray-500">No credentials</span>
           </div>
         </div>
         <div class="px-6 py-5 space-y-6">
@@ -278,147 +163,40 @@ tailwind.config = {
               <span class="rounded bg-green-50 px-1.5 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">Recommended</span>
             </h3>
             <p class="text-sm text-gray-500 mb-3">
-              Opens a visible browser on the server. Log in to Meta AI manually,
-              then click <strong>"Done"</strong> when finished. Cookies are captured automatically.
-            </p>
-            <div class="flex flex-wrap items-center gap-3">
-              <button id="metaCaptureBtn" onclick="startMetaAiCapture()"
-                      class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                Capture Meta AI Cookies
-              </button>
-              <button id="metaDoneBtn" onclick="signalMetaAiDone()" disabled
-                      class="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                Done — Extract Cookies
-              </button>
-            </div>
-            <div id="metaCaptureProgress" class="mt-3 hidden text-sm"></div>
-          </div>
-
-          <div class="border-t border-gray-100"></div>
-
-          <!-- Manual input -->
-          <div>
-            <button onclick="toggleCollapse('metaManualSection')"
-                    class="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
-              <svg id="metaManualChevron" class="h-4 w-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-              </svg>
-              Manual Cookie Input (Advanced)
-            </button>
-            <div id="metaManualSection" class="collapse-content max-h-0 mt-3">
-              <div class="space-y-3 rounded-lg bg-gray-50 border border-gray-200 p-4">
-                <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Step-by-step instructions</p>
-                <ol class="space-y-2 text-sm text-gray-600">
-                  <li class="flex items-start gap-2">
-                    <span class="step-num">1</span>
-                    <span>Open <strong>Meta AI</strong> (<code class="text-xs">https://www.meta.ai/</code>) in your browser and log in.</span>
-                  </li>
-                  <li class="flex items-start gap-2">
-                    <span class="step-num">2</span>
-                    <span>Press <kbd class="rounded border border-gray-300 bg-white px-1.5 py-0.5 text-xs font-medium">F12</kbd> to open DevTools.</span>
-                  </li>
-                  <li class="flex items-start gap-2">
-                    <span class="step-num">3</span>
-                    <span>Go to <strong>Application</strong> → <strong>Cookies</strong> → <code class="text-xs">https://www.meta.ai</code>.</span>
-                  </li>
-                  <li class="flex items-start gap-2">
-                    <span class="step-num">4</span>
-                    <span>Copy the values for <code class="text-xs font-semibold">datr</code> and <code class="text-xs font-semibold">ecto_1_sess</code>.</span>
-                  </li>
-                  <li class="flex items-start gap-2">
-                    <span class="step-num">5</span>
-                    <span>Paste them below and click <strong>"Save Cookies"</strong>.</span>
-                  </li>
-                </ol>
-                <div class="mt-4 space-y-3">
-                  <div>
-                    <label class="block text-xs font-medium text-gray-500 mb-1"><code>datr</code></label>
-                    <input id="metaDatr" type="text" placeholder="Paste datr cookie value"
-                           class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-mono">
-                  </div>
-                  <div>
-                    <label class="block text-xs font-medium text-gray-500 mb-1"><code>ecto_1_sess</code></label>
-                    <input id="metaEctoSess" type="text" placeholder="Paste ecto_1_sess cookie value"
-                           class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-mono">
-                  </div>
-                  <div class="flex gap-2">
-                    <button onclick="saveMetaManual()"
-                            class="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors">
-                      Save Cookies
-                    </button>
-                    <button onclick="validateMetaCookies()"
-                            class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors">
-                      Validate
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Delete -->
-          <div class="flex items-center justify-between border-t border-gray-100 pt-4">
-            <button onclick="deleteCredential('meta_ai','meta')"
-                    class="text-sm font-medium text-red-600 hover:text-red-700 transition-colors">
-              Delete stored credentials
-            </button>
-          </div>
-          <div id="metaMsg" class="text-sm hidden"></div>
-        </div>
-      </div>
-
-      <!-- Z.ai Card -->
-      <div id="zaiCard" class="rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-          <h2 class="text-lg font-semibold text-gray-900">Z.ai</h2>
-          <div class="flex items-center gap-2 text-sm">
-            <span id="zaiStatusCredDot" class="inline-block h-2.5 w-2.5 rounded-full bg-gray-300"></span>
-            <span id="zaiStatusCredText" class="text-gray-500">No credentials</span>
-          </div>
-        </div>
-        <div class="px-6 py-5 space-y-6">
-
-          <!-- Auto-capture -->
-          <div>
-            <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-              <span>Auto-Capture</span>
-              <span class="rounded bg-green-50 px-1.5 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">Recommended</span>
-            </h3>
-            <p class="text-sm text-gray-500 mb-3">
-              Opens a visible browser on the server. Log in to Z.ai manually,
+              Opens a visible browser on the server. Log in to Qwen manually,
               then click <strong>"Done"</strong> when finished. The session token is captured automatically.
             </p>
             <div class="flex flex-wrap items-center gap-3">
-              <button id="zaiCaptureBtn" onclick="startZaiCapture()"
+              <button id="qwenCaptureBtn" onclick="startQwenCapture()"
                       class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                Capture Z.ai Token
+                Capture Qwen Token
               </button>
-              <button id="zaiDoneBtn" onclick="signalZaiDone()" disabled
+              <button id="qwenDoneBtn" onclick="signalQwenDone()" disabled
                       class="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                 Done — Extract Token
               </button>
             </div>
-            <div id="zaiCaptureProgress" class="mt-3 hidden text-sm"></div>
+            <div id="qwenCaptureProgress" class="mt-3 hidden text-sm"></div>
           </div>
 
           <div class="border-t border-gray-100"></div>
 
           <!-- Manual input -->
           <div>
-            <button onclick="toggleCollapse('zaiManualSection')"
+            <button onclick="toggleCollapse('qwenManualSection')"
                     class="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
-              <svg id="zaiManualChevron" class="h-4 w-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg id="qwenManualChevron" class="h-4 w-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
               </svg>
               Manual Token Input (Advanced)
             </button>
-            <div id="zaiManualSection" class="collapse-content max-h-0 mt-3">
+            <div id="qwenManualSection" class="collapse-content max-h-0 mt-3">
               <div class="space-y-3 rounded-lg bg-gray-50 border border-gray-200 p-4">
                 <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Step-by-step instructions</p>
                 <ol class="space-y-2 text-sm text-gray-600">
                   <li class="flex items-start gap-2">
                     <span class="step-num">1</span>
-                    <span>Open <strong>Z.ai</strong> (<code class="text-xs">https://chat.z.ai/</code>) in your browser and log in.</span>
+                    <span>Open <strong>Qwen</strong> (<code class="text-xs">https://chat.qwen.ai/</code>) in your browser and log in.</span>
                   </li>
                   <li class="flex items-start gap-2">
                     <span class="step-num">2</span>
@@ -426,11 +204,11 @@ tailwind.config = {
                   </li>
                   <li class="flex items-start gap-2">
                     <span class="step-num">3</span>
-                    <span>Go to <strong>Application</strong> → <strong>Local Storage</strong> → <code class="text-xs">https://chat.z.ai</code>.</span>
+                    <span>Go to <strong>Application</strong> → <strong>Local Storage</strong> → <code class="text-xs">https://chat.qwen.ai</code>.</span>
                   </li>
                   <li class="flex items-start gap-2">
                     <span class="step-num">4</span>
-                    <span>Copy the value of the <code class="text-xs font-semibold">token</code> or <code class="text-xs font-semibold">jwt</code> key.</span>
+                    <span>Copy the value of the <code class="text-xs font-semibold">token</code> key.</span>
                   </li>
                   <li class="flex items-start gap-2">
                     <span class="step-num">5</span>
@@ -439,16 +217,16 @@ tailwind.config = {
                 </ol>
                 <div class="mt-4 space-y-3">
                   <div>
-                    <label class="block text-xs font-medium text-gray-500 mb-1">Session Token (JWT)</label>
-                    <textarea id="zaiToken" rows="2" placeholder="eyJhbGciOiJSUzI1NiIs..."
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Session Token</label>
+                    <textarea id="qwenToken" rows="2" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                               class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-mono"></textarea>
                   </div>
                   <div class="flex gap-2">
-                    <button onclick="saveZaiManual()"
+                    <button onclick="saveQwenManual()"
                             class="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors">
                       Save Token
                     </button>
-                    <button onclick="validateZaiToken()"
+                    <button onclick="validateQwenToken()"
                             class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors">
                       Validate
                     </button>
@@ -460,19 +238,17 @@ tailwind.config = {
 
           <!-- Delete -->
           <div class="flex items-center justify-between border-t border-gray-100 pt-4">
-            <button onclick="deleteCredential('zai_web','zai')"
+            <button onclick="deleteCredential('qwen_chat','qwen')"
                     class="text-sm font-medium text-red-600 hover:text-red-700 transition-colors">
               Delete stored credentials
             </button>
           </div>
-          <div id="zaiMsg" class="text-sm hidden"></div>
+          <div id="qwenMsg" class="text-sm hidden"></div>
         </div>
       </div>
     </div>
 
-    <!-- ================================================================
-         Tab: API Playground
-         ================================================================ -->
+    <!-- Tab: API Playground -->
     <div id="playgroundTab" class="space-y-4 fade-in" style="display:none;">
 
       <div class="rounded-xl bg-white border border-gray-200 shadow-sm p-6">
@@ -524,28 +300,14 @@ tailwind.config = {
       </div>
     </div>
 
-    <!-- ================================================================
-         Tab: API Examples
-         ================================================================ -->
+    <!-- Tab: API Examples -->
     <div id="examplesTab" class="space-y-6 fade-in" style="display:none;">
 
       <div class="rounded-xl bg-white border border-gray-200 shadow-sm p-6">
         <h2 class="text-lg font-semibold text-gray-900 mb-1">API Usage Examples</h2>
         <p class="text-sm text-gray-500 mb-4">
-          Use your API key to call the OpenAI-compatible endpoints from anywhere.
+          Use the OpenAI-compatible endpoints to access Qwen models from anywhere.
         </p>
-
-        <!-- API Key display -->
-        <div id="examplesApiKeySection" class="hidden mb-6 rounded-lg bg-blue-50 border border-blue-200 p-4">
-          <div class="flex items-center gap-2">
-            <span class="text-sm font-medium text-blue-800">Your API Key:</span>
-            <code id="examplesApiKey" class="flex-1 break-all bg-white px-2 py-0.5 rounded text-xs font-mono text-blue-800"></code>
-            <button onclick="copyExamplesApiKey()"
-                    class="shrink-0 rounded border border-blue-300 bg-white px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 transition-colors">
-              Copy
-            </button>
-          </div>
-        </div>
 
         <!-- curl examples -->
         <div class="space-y-4">
@@ -553,8 +315,7 @@ tailwind.config = {
             <p class="text-xs font-medium text-gray-500 mb-1.5">List available models (curl)</p>
             <div class="rounded-lg bg-gray-900 px-4 py-3 overflow-x-auto">
               <pre class="text-xs text-gray-300 leading-relaxed font-mono"><span class="text-gray-500"># List models</span>
-curl https://api.hubia.dev/v1/models \
-  -H <span class="text-amber-300">"Authorization: Bearer YOUR_API_KEY"</span></pre>
+curl http://localhost:8000/v1/models</pre>
             </div>
           </div>
 
@@ -562,11 +323,10 @@ curl https://api.hubia.dev/v1/models \
             <p class="text-xs font-medium text-gray-500 mb-1.5">Chat completion (curl, non-streaming)</p>
             <div class="rounded-lg bg-gray-900 px-4 py-3 overflow-x-auto">
               <pre class="text-xs text-gray-300 leading-relaxed font-mono"><span class="text-gray-500"># Chat completion</span>
-curl https://api.hubia.dev/v1/chat/completions \
-  -H <span class="text-amber-300">"Authorization: Bearer YOUR_API_KEY"</span> \
+curl http://localhost:8000/v1/chat/completions \
   -H <span class="text-amber-300">"Content-Type: application/json"</span> \
   -d '{
-    <span class="text-sky-300">"model"</span>: <span class="text-emerald-300">"meta-ai/llama-3"</span>,
+    <span class="text-sky-300">"model"</span>: <span class="text-emerald-300">"qwen/qwen3.7-max"</span>,
     <span class="text-sky-300">"messages"</span>: [{<span class="text-sky-300">"role"</span>:<span class="text-emerald-300">"user"</span>, <span class="text-sky-300">"content"</span>:<span class="text-emerald-300">"Hello"</span>}]
   }'</pre>
             </div>
@@ -576,11 +336,10 @@ curl https://api.hubia.dev/v1/chat/completions \
             <p class="text-xs font-medium text-gray-500 mb-1.5">Chat completion (curl, streaming)</p>
             <div class="rounded-lg bg-gray-900 px-4 py-3 overflow-x-auto">
               <pre class="text-xs text-gray-300 leading-relaxed font-mono"><span class="text-gray-500"># Streaming chat completion</span>
-curl https://api.hubia.dev/v1/chat/completions \
-  -H <span class="text-amber-300">"Authorization: Bearer YOUR_API_KEY"</span> \
+curl http://localhost:8000/v1/chat/completions \
   -H <span class="text-amber-300">"Content-Type: application/json"</span> \
   -d '{
-    <span class="text-sky-300">"model"</span>: <span class="text-emerald-300">"zai/glm-5"</span>,
+    <span class="text-sky-300">"model"</span>: <span class="text-emerald-300">"qwen/qwen3.7-max"</span>,
     <span class="text-sky-300">"messages"</span>: [{<span class="text-sky-300">"role"</span>:<span class="text-emerald-300">"user"</span>, <span class="text-sky-300">"content"</span>:<span class="text-emerald-300">"Hello"</span>}],
     <span class="text-sky-300">"stream"</span>: <span class="text-rose-300">true</span>
   }'</pre>
@@ -592,28 +351,24 @@ curl https://api.hubia.dev/v1/chat/completions \
             <div class="rounded-lg bg-gray-900 px-4 py-3 overflow-x-auto">
               <pre class="text-xs text-gray-300 leading-relaxed font-mono"><span class="text-gray-500">import httpx</span>
 
-API_KEY = <span class="text-emerald-300">"YOUR_API_KEY"</span>
-BASE_URL = <span class="text-emerald-300">"https://api.hubia.dev"</span>
+BASE_URL = <span class="text-emerald-300">"http://localhost:8000"</span>
 
 <span class="text-gray-500"># List models</span>
-resp = httpx.get(<span class="text-emerald-300">f"{BASE_URL}/v1/models"</span>,
-    headers={<span class="text-sky-300">"Authorization"</span>: <span class="text-emerald-300">f"Bearer {API_KEY}"</span>})
+resp = httpx.get(<span class="text-emerald-300">f"{BASE_URL}/v1/models"</span>)
 <span class="text-blue-300">print</span>(resp.json())
 
 <span class="text-gray-500"># Chat completion (non-streaming)</span>
 resp = httpx.post(<span class="text-emerald-300">f"{BASE_URL}/v1/chat/completions"</span>,
-    headers={<span class="text-sky-300">"Authorization"</span>: <span class="text-emerald-300">f"Bearer {API_KEY}"</span>},
     json={
-        <span class="text-sky-300">"model"</span>: <span class="text-emerald-300">"meta-ai/llama-3"</span>,
+        <span class="text-sky-300">"model"</span>: <span class="text-emerald-300">"qwen/qwen3.7-max"</span>,
         <span class="text-sky-300">"messages"</span>: [{<span class="text-sky-300">"role"</span>: <span class="text-emerald-300">"user"</span>, <span class="text-sky-300">"content"</span>: <span class="text-emerald-300">"Hello"</span>}],
     })
 <span class="text-blue-300">print</span>(resp.json())
 
 <span class="text-gray-500"># Streaming</span>
 <span class="text-blue-300">with</span> httpx.stream(<span class="text-emerald-300">"POST"</span>, <span class="text-emerald-300">f"{BASE_URL}/v1/chat/completions"</span>,
-    headers={<span class="text-sky-300">"Authorization"</span>: <span class="text-emerald-300">f"Bearer {API_KEY}"</span>},
     json={
-        <span class="text-sky-300">"model"</span>: <span class="text-emerald-300">"zai/glm-5"</span>,
+        <span class="text-sky-300">"model"</span>: <span class="text-emerald-300">"qwen/qwen3.7-max"</span>,
         <span class="text-sky-300">"messages"</span>: [{<span class="text-sky-300">"role"</span>: <span class="text-emerald-300">"user"</span>, <span class="text-sky-300">"content"</span>: <span class="text-emerald-300">"Hello"</span>}],
         <span class="text-sky-300">"stream"</span>: <span class="text-rose-300">True</span>,
     }) <span class="text-blue-300">as</span> resp:
@@ -626,25 +381,19 @@ resp = httpx.post(<span class="text-emerald-300">f"{BASE_URL}/v1/chat/completion
           <div>
             <p class="text-xs font-medium text-gray-500 mb-1.5">JavaScript (fetch)</p>
             <div class="rounded-lg bg-gray-900 px-4 py-3 overflow-x-auto">
-              <pre class="text-xs text-gray-300 leading-relaxed font-mono"><span class="text-gray-500">const</span> API_KEY = <span class="text-emerald-300">"YOUR_API_KEY"</span>;
-<span class="text-gray-500">const</span> BASE_URL = <span class="text-emerald-300">"https://api.hubia.dev"</span>;
+              <pre class="text-xs text-gray-300 leading-relaxed font-mono"><span class="text-gray-500">const</span> BASE_URL = <span class="text-emerald-300">"http://localhost:8000"</span>;
 
 <span class="text-gray-500">// List models</span>
-<span class="text-blue-300">const</span> modelsResp = <span class="text-blue-300">await</span> fetch(<span class="text-emerald-300">`${BASE_URL}/v1/models`</span>, {
-  headers: { <span class="text-sky-300">"Authorization"</span>: <span class="text-emerald-300">`Bearer ${API_KEY}`</span> }
-});
+<span class="text-blue-300">const</span> modelsResp = <span class="text-blue-300">await</span> fetch(<span class="text-emerald-300">`${BASE_URL}/v1/models`</span>);
 <span class="text-blue-300">const</span> models = <span class="text-blue-300">await</span> modelsResp.json();
 <span class="text-blue-300">console</span>.log(models);
 
 <span class="text-gray-500">// Chat completion (non-streaming)</span>
 <span class="text-blue-300">const</span> resp = <span class="text-blue-300">await</span> fetch(<span class="text-emerald-300">`${BASE_URL}/v1/chat/completions`</span>, {
   method: <span class="text-emerald-300">"POST"</span>,
-  headers: {
-    <span class="text-sky-300">"Authorization"</span>: <span class="text-emerald-300">`Bearer ${API_KEY}`</span>,
-    <span class="text-sky-300">"Content-Type"</span>: <span class="text-emerald-300">"application/json"</span>,
-  },
+  headers: { <span class="text-sky-300">"Content-Type"</span>: <span class="text-emerald-300">"application/json"</span> },
   body: JSON.stringify({
-    model: <span class="text-emerald-300">"meta-ai/llama-3"</span>,
+    model: <span class="text-emerald-300">"qwen/qwen3.7-max"</span>,
     messages: [{ role: <span class="text-emerald-300">"user"</span>, content: <span class="text-emerald-300">"Hello"</span> }]
   })
 });
@@ -654,12 +403,9 @@ resp = httpx.post(<span class="text-emerald-300">f"{BASE_URL}/v1/chat/completion
 <span class="text-gray-500">// Streaming with fetch</span>
 <span class="text-blue-300">const</span> streamResp = <span class="text-blue-300">await</span> fetch(<span class="text-emerald-300">`${BASE_URL}/v1/chat/completions`</span>, {
   method: <span class="text-emerald-300">"POST"</span>,
-  headers: {
-    <span class="text-sky-300">"Authorization"</span>: <span class="text-emerald-300">`Bearer ${API_KEY}`</span>,
-    <span class="text-sky-300">"Content-Type"</span>: <span class="text-emerald-300">"application/json"</span>,
-  },
+  headers: { <span class="text-sky-300">"Content-Type"</span>: <span class="text-emerald-300">"application/json"</span> },
   body: JSON.stringify({
-    model: <span class="text-emerald-300">"zai/glm-5"</span>,
+    model: <span class="text-emerald-300">"qwen/qwen3.7-max"</span>,
     messages: [{ role: <span class="text-emerald-300">"user"</span>, content: <span class="text-emerald-300">"Hello"</span> }],
     stream: <span class="text-rose-300">true</span>
   })
@@ -689,12 +435,8 @@ resp = httpx.post(<span class="text-emerald-300">f"{BASE_URL}/v1/chat/completion
 // ===========================================================================
 // State
 // ===========================================================================
-let currentUser = null;
-let apiKey = null;
-let metaCaptureId = null;
-let metaPollTimer = null;
-let zaiCaptureId = null;
-let zaiPollTimer = null;
+let qwenCaptureId = null;
+let qwenPollTimer = null;
 let abortController = null;
 
 // ===========================================================================
@@ -736,44 +478,29 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-function getToken() {
-  return localStorage.getItem('hubia_token') || '';
-}
-
 function getBaseUrl() {
-  // Use relative URLs — same origin as the API
   return '';
 }
 
 async function apiPost(path, body) {
   const resp = await fetch(getBaseUrl() + path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
     const errorMsg = err.detail || err.error?.message || `HTTP ${resp.status}`;
-    if (resp.status === 401 && path !== '/auth/login') {
-      logout();
-      throw new Error('Session expired. Please log in again.');
-    }
     throw new Error(errorMsg);
   }
   return await resp.json();
 }
 
 async function apiGet(path) {
-  const resp = await fetch(getBaseUrl() + path, {
-    headers: { 'Authorization': 'Bearer ' + getToken() }
-  });
+  const resp = await fetch(getBaseUrl() + path);
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
     const errorMsg = err.detail || err.error?.message || `HTTP ${resp.status}`;
-    if (resp.status === 401) {
-      logout();
-      throw new Error('Session expired. Please log in again.');
-    }
     throw new Error(errorMsg);
   }
   return await resp.json();
@@ -781,16 +508,11 @@ async function apiGet(path) {
 
 async function apiDelete(path) {
   const resp = await fetch(getBaseUrl() + path, {
-    method: 'DELETE',
-    headers: { 'Authorization': 'Bearer ' + getToken() }
+    method: 'DELETE'
   });
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
     const errorMsg = err.detail || err.error?.message || `HTTP ${resp.status}`;
-    if (resp.status === 401) {
-      logout();
-      throw new Error('Session expired. Please log in again.');
-    }
     throw new Error(errorMsg);
   }
   return await resp.json();
@@ -830,292 +552,19 @@ function toggleCollapse(id) {
 }
 
 // ===========================================================================
-// Auth Section
-// ===========================================================================
-function switchAuthTab(tab) {
-  const loginTab = document.getElementById('authTabLogin');
-  const regTab = document.getElementById('authTabRegister');
-  const loginForm = document.getElementById('loginForm');
-  const regForm = document.getElementById('registerForm');
-  const loginErr = document.getElementById('loginError');
-  const regErr = document.getElementById('regError');
-
-  loginErr.classList.add('hidden');
-  regErr.classList.add('hidden');
-
-  if (tab === 'login') {
-    loginTab.className = 'flex-1 px-4 py-3 text-sm font-medium text-center border-b-2 transition-colors tab-btn active';
-    loginTab.style.cssText = 'border-bottom-color:#2563eb;color:#2563eb;';
-    regTab.className = 'flex-1 px-4 py-3 text-sm font-medium text-center border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition-colors tab-btn';
-    regTab.style.cssText = '';
-    loginForm.style.display = '';
-    regForm.style.display = 'none';
-  } else {
-    regTab.className = 'flex-1 px-4 py-3 text-sm font-medium text-center border-b-2 transition-colors tab-btn active';
-    regTab.style.cssText = 'border-bottom-color:#2563eb;color:#2563eb;';
-    loginTab.className = 'flex-1 px-4 py-3 text-sm font-medium text-center border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition-colors tab-btn';
-    loginTab.style.cssText = '';
-    regForm.style.display = '';
-    loginForm.style.display = 'none';
-  }
-}
-
-async function login() {
-  const username = document.getElementById('loginUsername').value.trim();
-  const password = document.getElementById('loginPassword').value;
-  const errorEl = document.getElementById('loginError');
-
-  if (!username || !password) {
-    errorEl.textContent = 'Please fill in both fields.';
-    errorEl.classList.remove('hidden');
-    return;
-  }
-
-  errorEl.classList.add('hidden');
-  const btn = document.querySelector('#loginForm button');
-  btn.disabled = true;
-  btn.textContent = 'Logging in...';
-
-  try {
-    const result = await apiPost('/auth/login', { username, password });
-    console.log('Login response:', result);
-    
-    if (!result.access_token) {
-      throw new Error('Server did not return an access token');
-    }
-    
-    localStorage.setItem('hubia_token', result.access_token);
-    console.log('Token saved to localStorage');
-    
-    showToast('success', 'Logged in as ' + username);
-    await loadApp();
-  } catch (err) {
-    console.error('Login error:', err);
-    errorEl.textContent = err.message;
-    errorEl.classList.remove('hidden');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Log In';
-  }
-}
-
-async function register() {
-  const username = document.getElementById('regUsername').value.trim();
-  const password = document.getElementById('regPassword').value;
-  const confirm = document.getElementById('regConfirm').value;
-  const errorEl = document.getElementById('regError');
-
-  if (!username || !password || !confirm) {
-    errorEl.textContent = 'Please fill in all fields.';
-    errorEl.classList.remove('hidden');
-    return;
-  }
-
-  if (username.length < 3) {
-    errorEl.textContent = 'Username must be at least 3 characters.';
-    errorEl.classList.remove('hidden');
-    return;
-  }
-
-  if (password.length < 8) {
-    errorEl.textContent = 'Password must be at least 8 characters.';
-    errorEl.classList.remove('hidden');
-    return;
-  }
-
-  if (password !== confirm) {
-    errorEl.textContent = 'Passwords do not match.';
-    errorEl.classList.remove('hidden');
-    return;
-  }
-
-  errorEl.classList.add('hidden');
-  const btn = document.querySelector('#registerForm button');
-  btn.disabled = true;
-  btn.textContent = 'Creating account...';
-
-  try {
-    await apiPost('/auth/register', { username, password });
-    showToast('success', 'Account created! You can now log in.');
-    switchAuthTab('login');
-    document.getElementById('loginUsername').value = username;
-  } catch (err) {
-    errorEl.textContent = err.message;
-    errorEl.classList.remove('hidden');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Create Account';
-  }
-}
-
-// ===========================================================================
-// Main App
-// ===========================================================================
-async function loadApp() {
-  showToast('info', 'Loading...');
-  
-  // Debug: Check all required elements before proceeding
-  const requiredElements = {
-    authSection: document.getElementById('authSection'),
-    appSection: document.getElementById('appSection'),
-    appUsername: document.getElementById('appUsername'),
-    dashboardUsername: document.getElementById('dashboardUsername')
-  };
-  
-  console.log('Required DOM elements:', requiredElements);
-  
-  const missingElements = Object.entries(requiredElements)
-    .filter(([key, el]) => !el)
-    .map(([key]) => key);
-  
-  if (missingElements.length > 0) {
-    console.error('Missing elements:', missingElements);
-    showToast('error', 'Page not loaded correctly. Missing: ' + missingElements.join(', ') + '. Please refresh.');
-    return;
-  }
-  
-  try {
-    currentUser = await apiGet('/auth/me');
-    
-    requiredElements.authSection.style.display = 'none';
-    requiredElements.appSection.style.display = '';
-    requiredElements.appUsername.textContent = currentUser.username;
-    requiredElements.dashboardUsername.textContent = currentUser.username;
-    apiKey = currentUser.api_key || null;
-
-    // Load dashboard and initial data
-    await loadDashboard();
-    await loadCredentials();
-
-    // Load models for playground
-    loadModels();
-
-    // Switch to dashboard tab
-    switchTab('dashboard');
-    showToast('success', 'Welcome back, ' + currentUser.username + '!');
-  } catch (err) {
-    console.error('loadApp error:', err);
-    showToast('error', 'Failed to load: ' + err.message);
-    // Don't auto-logout on loadApp failure — let user see the error
-  }
-}
-
-async function loadDashboard() {
-  // Load credentials count
-  try {
-    const creds = await apiGet('/sandbox/credentials');
-    const credCountEl = document.getElementById('credCount');
-    if (credCountEl) {
-      credCountEl.textContent = creds.credentials.length;
-    }
-
-    for (const c of creds.credentials) {
-      if (c.provider === 'meta_ai') {
-        const badge = document.getElementById('metaStatusBadge');
-        const label = document.getElementById('metaStatusLabel');
-        if (badge) badge.className = 'inline-block h-2.5 w-2.5 rounded-full bg-emerald-500';
-        if (label) label.textContent = 'Stored';
-      } else if (c.provider === 'zai_web') {
-        const badge = document.getElementById('zaiStatusBadge');
-        const label = document.getElementById('zaiStatusLabel');
-        if (badge) badge.className = 'inline-block h-2.5 w-2.5 rounded-full bg-emerald-500';
-        if (label) label.textContent = 'Stored';
-      }
-    }
-  } catch (_) {}
-
-  // Load API key
-  const apiKeyDisplay = document.getElementById('apiKeyDisplay');
-  const generateKeyBtn = document.getElementById('generateKeyBtn');
-  const apiKeyPreview = document.getElementById('apiKeyPreview');
-  const examplesApiKeySection = document.getElementById('examplesApiKeySection');
-  const examplesApiKey = document.getElementById('examplesApiKey');
-  
-  if (apiKey) {
-    if (apiKeyDisplay) apiKeyDisplay.classList.remove('hidden');
-    if (generateKeyBtn) generateKeyBtn.style.display = 'none';
-    if (apiKeyPreview) apiKeyPreview.textContent = apiKey.substring(0, 20) + '...' + apiKey.substring(apiKey.length - 8);
-    // Also show in examples
-    if (examplesApiKeySection) examplesApiKeySection.classList.remove('hidden');
-    if (examplesApiKey) examplesApiKey.textContent = apiKey;
-  } else {
-    if (apiKeyDisplay) apiKeyDisplay.classList.add('hidden');
-    if (generateKeyBtn) generateKeyBtn.style.display = '';
-  }
-}
-
-async function generateApiKey() {
-  const btn = document.getElementById('generateKeyBtn');
-  const status = document.getElementById('apiKeyStatus');
-  btn.disabled = true;
-  btn.textContent = 'Generating...';
-  status.classList.remove('hidden');
-  status.textContent = 'Generating API key...';
-
-  try {
-    const result = await apiPost('/auth/keys', {});
-    apiKey = result.api_key;
-    document.getElementById('apiKeyDisplay').classList.remove('hidden');
-    document.getElementById('generateKeyBtn').style.display = 'none';
-    document.getElementById('apiKeyPreview').textContent = apiKey.substring(0, 20) + '...' + apiKey.substring(apiKey.length - 8);
-    document.getElementById('examplesApiKeySection').classList.remove('hidden');
-    document.getElementById('examplesApiKey').textContent = apiKey;
-    status.textContent = 'API key generated successfully!';
-    showToast('success', 'API key generated!');
-  } catch (err) {
-    status.textContent = 'Error: ' + err.message;
-    showToast('error', err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Generate API Key';
-  }
-}
-
-function copyApiKey() {
-  if (apiKey) {
-    navigator.clipboard.writeText(apiKey).then(() => {
-      showToast('success', 'API key copied to clipboard!');
-    }).catch(() => {
-      showToast('error', 'Failed to copy. Select and copy manually.');
-    });
-  }
-}
-
-function copyExamplesApiKey() {
-  copyApiKey();
-}
-
-function logout() {
-  localStorage.removeItem('hubia_token');
-  currentUser = null;
-  apiKey = null;
-  document.getElementById('authSection').style.display = '';
-  document.getElementById('appSection').style.display = 'none';
-  document.getElementById('loginPassword').value = '';
-  document.getElementById('loginError').classList.add('hidden');
-  showToast('info', 'Logged out.');
-}
-
-// ===========================================================================
 // Tab switching
 // ===========================================================================
 function switchTab(tab) {
   const tabs = ['dashboard', 'credentials', 'playground', 'examples'];
   
-  // Button IDs: tabDashboard, tabCredentials, tabPlayground, tabExamples
-  // Content IDs: dashboardTab, credentialsTab, playgroundTab, examplesTab
-  
   tabs.forEach(t => {
-    const btnId = 'tab' + t.charAt(0).toUpperCase() + t.slice(1); // tabDashboard, etc.
-    const contentId = t + 'Tab'; // dashboardTab, etc.
+    const btnId = 'tab' + t.charAt(0).toUpperCase() + t.slice(1);
+    const contentId = t + 'Tab';
     
     const btn = document.getElementById(btnId);
     const content = document.getElementById(contentId);
     
-    if (!btn || !content) {
-      console.warn('Missing tab element:', { btnId, contentId, btn, content });
-      return;
-    }
+    if (!btn || !content) return;
     
     if (t === tab) {
       btn.className = 'tab-btn whitespace-nowrap px-1 py-3 text-sm font-medium border-b-2 transition-colors active';
@@ -1128,19 +577,18 @@ function switchTab(tab) {
     }
   });
 
-  // Reload models when switching to playground
   if (tab === 'playground') {
     loadModels();
   }
 }
 
 // ===========================================================================
-// Credentials: Interactive Capture — Meta AI
+// Credentials: Interactive Capture — Qwen
 // ===========================================================================
-async function startMetaAiCapture() {
-  const btn = document.getElementById('metaCaptureBtn');
-  const doneBtn = document.getElementById('metaDoneBtn');
-  const progress = document.getElementById('metaCaptureProgress');
+async function startQwenCapture() {
+  const btn = document.getElementById('qwenCaptureBtn');
+  const doneBtn = document.getElementById('qwenDoneBtn');
+  const progress = document.getElementById('qwenCaptureProgress');
 
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner">&#8987;</span> Starting...';
@@ -1149,70 +597,23 @@ async function startMetaAiCapture() {
   progress.style.display = 'block';
 
   try {
-    const result = await apiPost('/sandbox/meta-ai/capture/start', {});
-    metaCaptureId = result.capture_id;
-    progress.textContent = 'Browser opened. Log in to Meta AI in the browser window, then click "Done — Extract Cookies" above.';
+    const result = await apiPost('/sandbox/qwen/capture/start', {});
+    qwenCaptureId = result.capture_id;
+    progress.textContent = 'Browser opened. Log in to Qwen in the browser window, then click "Done — Extract Token" above.';
     doneBtn.disabled = false;
-    startPolling('meta');
+    startPolling();
   } catch (err) {
     progress.className = 'text-sm mt-3 p-3 rounded-lg bg-red-50 text-red-800 border border-red-200';
     progress.textContent = err.message;
     btn.disabled = false;
-    btn.innerHTML = 'Capture Meta AI Cookies';
+    btn.innerHTML = 'Capture Qwen Token';
   }
 }
 
-async function signalMetaAiDone() {
-  if (!metaCaptureId) return;
-  const doneBtn = document.getElementById('metaDoneBtn');
-  const progress = document.getElementById('metaCaptureProgress');
-
-  doneBtn.disabled = true;
-  doneBtn.textContent = 'Extracting...';
-  progress.textContent = 'Extracting cookies...';
-  progress.className = 'text-sm mt-3 p-3 rounded-lg bg-blue-50 text-blue-800 border border-blue-200';
-  progress.style.display = 'block';
-
-  try {
-    await apiPost('/sandbox/meta-ai/capture/' + metaCaptureId + '/done', {});
-  } catch (err) {
-    progress.className = 'text-sm mt-3 p-3 rounded-lg bg-red-50 text-red-800 border border-red-200';
-    progress.textContent = err.message;
-  }
-}
-
-// ===========================================================================
-// Credentials: Interactive Capture — Z.ai
-// ===========================================================================
-async function startZaiCapture() {
-  const btn = document.getElementById('zaiCaptureBtn');
-  const doneBtn = document.getElementById('zaiDoneBtn');
-  const progress = document.getElementById('zaiCaptureProgress');
-
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner">&#8987;</span> Starting...';
-  progress.className = 'text-sm mt-3 p-3 rounded-lg bg-blue-50 text-blue-800 border border-blue-200';
-  progress.textContent = 'Launching browser...';
-  progress.style.display = 'block';
-
-  try {
-    const result = await apiPost('/sandbox/zai/capture/start', {});
-    zaiCaptureId = result.capture_id;
-    progress.textContent = 'Browser opened. Log in to Z.ai in the browser window, then click "Done — Extract Token" above.';
-    doneBtn.disabled = false;
-    startPolling('zai');
-  } catch (err) {
-    progress.className = 'text-sm mt-3 p-3 rounded-lg bg-red-50 text-red-800 border border-red-200';
-    progress.textContent = err.message;
-    btn.disabled = false;
-    btn.innerHTML = 'Capture Z.ai Token';
-  }
-}
-
-async function signalZaiDone() {
-  if (!zaiCaptureId) return;
-  const doneBtn = document.getElementById('zaiDoneBtn');
-  const progress = document.getElementById('zaiCaptureProgress');
+async function signalQwenDone() {
+  if (!qwenCaptureId) return;
+  const doneBtn = document.getElementById('qwenDoneBtn');
+  const progress = document.getElementById('qwenCaptureProgress');
 
   doneBtn.disabled = true;
   doneBtn.textContent = 'Extracting...';
@@ -1221,7 +622,7 @@ async function signalZaiDone() {
   progress.style.display = 'block';
 
   try {
-    await apiPost('/sandbox/zai/capture/' + zaiCaptureId + '/done', {});
+    await apiPost('/sandbox/qwen/capture/' + qwenCaptureId + '/done', {});
   } catch (err) {
     progress.className = 'text-sm mt-3 p-3 rounded-lg bg-red-50 text-red-800 border border-red-200';
     progress.textContent = err.message;
@@ -1231,43 +632,36 @@ async function signalZaiDone() {
 // ===========================================================================
 // Polling
 // ===========================================================================
-function startPolling(provider) {
+function startPolling() {
   const interval = setInterval(async () => {
-    const captureId = provider === 'meta' ? metaCaptureId : zaiCaptureId;
-    if (!captureId) { clearInterval(interval); return; }
+    if (!qwenCaptureId) { clearInterval(interval); return; }
 
     try {
-      const path = provider === 'meta'
-        ? '/sandbox/meta-ai/capture/' + captureId + '/status'
-        : '/sandbox/zai/capture/' + captureId + '/status';
+      const path = '/sandbox/qwen/capture/' + qwenCaptureId + '/status';
       const state = await apiGet(path);
-      const progressEl = document.getElementById(provider === 'meta' ? 'metaCaptureProgress' : 'zaiCaptureProgress');
-      const captureBtn = document.getElementById(provider === 'meta' ? 'metaCaptureBtn' : 'zaiCaptureBtn');
-      const doneBtn = document.getElementById(provider === 'meta' ? 'metaDoneBtn' : 'zaiDoneBtn');
+      const progressEl = document.getElementById('qwenCaptureProgress');
+      const captureBtn = document.getElementById('qwenCaptureBtn');
+      const doneBtn = document.getElementById('qwenDoneBtn');
 
       if (state.status === 'ok') {
         clearInterval(interval);
         progressEl.className = 'text-sm mt-3 p-3 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200';
         progressEl.textContent = 'Capture successful! Credentials stored.';
         captureBtn.disabled = false;
-        captureBtn.innerHTML = provider === 'meta' ? 'Capture Meta AI Cookies' : 'Capture Z.ai Token';
+        captureBtn.innerHTML = 'Capture Qwen Token';
         doneBtn.disabled = true;
-        doneBtn.textContent = provider === 'meta' ? 'Done — Extract Cookies' : 'Done — Extract Token';
-        updateCredStatus(provider, 'stored');
-        if (provider === 'meta') metaCaptureId = null;
-        else zaiCaptureId = null;
-        // Reload dashboard stats
-        loadDashboard();
+        doneBtn.textContent = 'Done — Extract Token';
+        updateCredStatus('qwen', 'stored');
+        qwenCaptureId = null;
       } else if (state.status === 'error') {
         clearInterval(interval);
         progressEl.className = 'text-sm mt-3 p-3 rounded-lg bg-red-50 text-red-800 border border-red-200';
         progressEl.textContent = state.error || 'Capture failed.';
         captureBtn.disabled = false;
-        captureBtn.innerHTML = provider === 'meta' ? 'Capture Meta AI Cookies' : 'Capture Z.ai Token';
+        captureBtn.innerHTML = 'Capture Qwen Token';
         doneBtn.disabled = true;
-        doneBtn.textContent = provider === 'meta' ? 'Done — Extract Cookies' : 'Done — Extract Token';
-        if (provider === 'meta') metaCaptureId = null;
-        else zaiCaptureId = null;
+        doneBtn.textContent = 'Done — Extract Token';
+        qwenCaptureId = null;
       } else {
         progressEl.className = 'text-sm mt-3 p-3 rounded-lg bg-blue-50 text-blue-800 border border-blue-200';
         progressEl.textContent = 'Waiting for login... (polling every 2s)';
@@ -1275,65 +669,34 @@ function startPolling(provider) {
     } catch (_) {}
   }, 2000);
 
-  if (provider === 'meta') metaPollTimer = interval;
-  else zaiPollTimer = interval;
+  qwenPollTimer = interval;
 }
 
 // ===========================================================================
-// Credentials: Manual Input
+// Credentials: Manual Input — Qwen
 // ===========================================================================
-async function saveMetaManual() {
-  const datr = document.getElementById('metaDatr').value.trim();
-  const ecto = document.getElementById('metaEctoSess').value.trim();
-
-  if (!datr || !ecto) {
-    showMsg('metaMsg', 'error', 'Please fill in both cookie fields.');
-    return;
-  }
-
-  try {
-    await apiPost('/sandbox/meta-ai/capture', { cookies: { datr, ecto_1_sess: ecto } });
-    showMsg('metaMsg', 'success', 'Cookies saved successfully!');
-    updateCredStatus('meta', 'stored');
-    loadDashboard();
-  } catch (err) {
-    showMsg('metaMsg', 'error', err.message);
-  }
-}
-
-function validateMetaCookies() {
-  const datr = document.getElementById('metaDatr').value.trim();
-  const ecto = document.getElementById('metaEctoSess').value.trim();
-  if (datr && ecto) {
-    showMsg('metaMsg', 'info', 'Both cookie values provided.');
-  } else {
-    showMsg('metaMsg', 'error', 'Missing required cookie values. Please fill in both datr and ecto_1_sess.');
-  }
-}
-
-async function saveZaiManual() {
-  const token = document.getElementById('zaiToken').value.trim();
+async function saveQwenManual() {
+  const token = document.getElementById('qwenToken').value.trim();
   if (!token) {
-    showMsg('zaiMsg', 'error', 'Please enter a token.');
+    showMsg('qwenMsg', 'error', 'Please enter a token.');
     return;
   }
 
   try {
-    await apiPost('/sandbox/zai/capture', { token });
-    showMsg('zaiMsg', 'success', 'Token saved successfully!');
-    updateCredStatus('zai', 'stored');
-    loadDashboard();
+    await apiPost('/sandbox/qwen/capture', { cookies: { token: token } });
+    showMsg('qwenMsg', 'success', 'Token saved successfully!');
+    updateCredStatus('qwen', 'stored');
   } catch (err) {
-    showMsg('zaiMsg', 'error', err.message);
+    showMsg('qwenMsg', 'error', err.message);
   }
 }
 
-function validateZaiToken() {
-  const token = document.getElementById('zaiToken').value.trim();
-  if (token && token.length >= 10) {
-    showMsg('zaiMsg', 'info', 'Token looks valid (length: ' + token.length + ' chars).');
+function validateQwenToken() {
+  const token = document.getElementById('qwenToken').value.trim();
+  if (token && token.length >= 20) {
+    showMsg('qwenMsg', 'info', 'Token looks valid (length: ' + token.length + ' chars).');
   } else {
-    showMsg('zaiMsg', 'error', 'Token is empty or too short (min 10 characters).');
+    showMsg('qwenMsg', 'error', 'Token is empty or too short (min 20 characters).');
   }
 }
 
@@ -1341,7 +704,7 @@ function validateZaiToken() {
 // Credentials: Status & Delete
 // ===========================================================================
 function updateCredStatus(provider, status) {
-  const prefix = provider === 'meta' ? 'meta' : 'zai';
+  const prefix = 'qwen';
   const dot = document.getElementById(prefix + 'StatusCredDot');
   const txt = document.getElementById(prefix + 'StatusCredText');
 
@@ -1352,14 +715,6 @@ function updateCredStatus(provider, status) {
     dot.className = 'inline-block h-2.5 w-2.5 rounded-full bg-gray-300';
     txt.textContent = 'No credentials';
   }
-
-  // Also update dashboard badges
-  const dashDot = document.getElementById(prefix + 'StatusBadge');
-  const dashLabel = document.getElementById(prefix + 'StatusLabel');
-  if (dashDot && dashLabel) {
-    dashDot.className = 'inline-block h-2.5 w-2.5 rounded-full ' + (status === 'stored' ? 'bg-emerald-500' : 'bg-gray-300');
-    dashLabel.textContent = status === 'stored' ? 'Stored' : '—';
-  }
 }
 
 async function loadCredentials() {
@@ -1369,9 +724,7 @@ async function loadCredentials() {
     for (const c of creds.credentials) {
       providers[c.provider] = true;
     }
-    updateCredStatus('meta', providers['meta_ai'] ? 'stored' : 'none');
-    updateCredStatus('zai', providers['zai_web'] ? 'stored' : 'none');
-    document.getElementById('credCount').textContent = creds.credentials.length;
+    updateCredStatus('qwen', providers['qwen_chat'] ? 'stored' : 'none');
   } catch (_) {}
 }
 
@@ -1382,7 +735,6 @@ async function deleteCredential(provider, shortName) {
     await apiDelete('/sandbox/credentials/' + provider);
     updateCredStatus(shortName, 'none');
     showMsg(shortName + 'Msg', 'success', 'Credentials deleted.');
-    loadDashboard();
   } catch (err) {
     showMsg(shortName + 'Msg', 'error', err.message);
   }
@@ -1465,13 +817,9 @@ async function sendNonStreaming(model, message, responseContent) {
 }
 
 async function sendStreaming(model, message, responseContent, signal) {
-  const token = getToken();
   const resp = await fetch(getBaseUrl() + '/v1/chat/completions', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + token
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: model,
       messages: [{ role: 'user', content: message }],
@@ -1531,10 +879,8 @@ function copyPlaygroundResponse() {
 // Init
 // ===========================================================================
 document.addEventListener('DOMContentLoaded', async () => {
-  const token = getToken();
-  if (token) {
-    await loadApp();
-  }
+  // Load credentials status on page load
+  loadCredentials();
 });
 </script>
 </body>

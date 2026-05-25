@@ -1,7 +1,7 @@
 [project]
-name = "hubia"
+name = "qwen-proxy"
 version = "0.1.0"
-description = "AI API hub — OpenAI-compatible access to Meta AI and Z.ai"
+description = "OpenAI-compatible API proxy for Qwen AI"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
@@ -15,9 +15,12 @@ dependencies = [
     "passlib[bcrypt]>=1.7",
     "python-dotenv>=1.0",
     "httpx>=0.28",
-    "metaai-sdk>=2.0.0",
     "playwright>=1.40.0",
+    "typer>=0.9.0",
 ]
+
+[project.scripts]
+qwen-proxy = "qwen_proxy.cli:app"
 
 [project.optional-dependencies]
 dev = [
@@ -30,6 +33,10 @@ dev = [
 [build-system]
 requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["hubia*", "qwen_proxy*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

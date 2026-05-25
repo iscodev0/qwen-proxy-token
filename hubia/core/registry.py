@@ -41,7 +41,7 @@ class ProviderRegistry:
         """Resolve *model_id* to an ``(AIProvider, local_model)`` pair.
 
         The *local_model* is the model ID with the prefix stripped (e.g.
-        ``"meta-ai/llama-3"`` → ``"llama-3"``).  Returns ``None`` if no
+        ``"meta-ai/muse-spark"`` → ``"muse-spark"``).  Returns ``None`` if no
         registered prefix matches.
         """
         for prefix, provider_name in self._prefix_map.items():

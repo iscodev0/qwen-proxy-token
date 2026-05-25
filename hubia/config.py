@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     # Server
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 8089
     debug: bool = False
 
     # Database
@@ -27,15 +27,18 @@ class Settings(BaseSettings):
     # CORS — allow frontend dev servers and production origins
     cors_origins: list[str] = [
         "http://localhost:3000",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
+        "http://localhost:8089",
+        "http://127.0.0.1:8089",
         "http://localhost:5173",
+        "http://0.0.0.0:8089",
+        "http://127.0.0.1:8089",
     ]
 
     # Provider defaults
     meta_ai_doc_ids: dict[str, str] = {
-        "llama-3": "25010949351905993",
+        "muse-spark": "25010949351905993",
     }
+    qwen_default_model: str = "qwen3.7-max"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

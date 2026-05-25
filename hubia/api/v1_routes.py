@@ -58,10 +58,7 @@ def _get_registry() -> ProviderRegistry:
 async def list_models(
     current_user: dict = Depends(get_current_user),
 ) -> ModelList:
-    """List all available models from all registered providers.
-
-    Requires a valid JWT or API key in the ``Authorization`` header.
-    """
+    """List all available models from all registered providers."""
     registry = _get_registry()
     models = await registry.list_all_models()
     return ModelList.from_model_infos(models)
@@ -81,8 +78,7 @@ async def chat_completion(
     """Chat completion — standard (JSON) or streaming (SSE).
 
     Set ``stream: true`` in the request body to receive a Server-Sent Events
-    stream.  Both modes require valid authentication and stored provider
-    credentials.
+    stream.  Both modes require stored provider credentials.
     """
     # Resolve provider from model ID
     registry = _get_registry()
@@ -92,8 +88,8 @@ async def chat_completion(
 
     provider, local_model = resolved
 
-    # Determine provider name for credential lookup
-    provider_name = "meta_ai" if "meta-ai" in body.model else "zai_web"
+    # Only Qwen provider is supported
+    provider_name = "qwen_chat"
 
     # Fetch user's stored credentials for this provider
     cred_row = await get_credential(db, current_user["id"], provider_name)
@@ -208,18 +204,14 @@ def _reraise_as_api_error(exc: Exception) -> None:
     ``ProviderError`` — this helper maps them to the centralised API
     exception classes.
     """
-    from hubia.providers.meta_ai import (
-        ProviderError as MetaProviderError,
-        SessionExpiredError as MetaSessionExpired,
-    )
-    from hubia.providers.zai_web import (
-        ProviderError as ZaiProviderError,
-        SessionExpiredError as ZaiSessionExpired,
+    from hubia.providers.qwen_chat import (
+        ProviderError as QwenProviderError,
+        QwenSessionExpiredError,
     )
 
-    if isinstance(exc, (MetaSessionExpired, ZaiSessionExpired)):
+    if isinstance(exc, QwenSessionExpiredError):
         raise ApiSessionExpiredError(str(exc)) from exc
-    if isinstance(exc, (MetaProviderError, ZaiProviderError)):
+    if isinstance(exc, QwenProviderError):
         raise ApiProviderError(str(exc)) from exc
     if isinstance(exc, HubiaError):
         raise exc

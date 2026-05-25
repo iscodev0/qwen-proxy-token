@@ -36,10 +36,10 @@ class TestChatCompletionRequest:
     def test_valid_request(self):
         """All required fields accepted."""
         req = ChatCompletionRequest(
-            model="meta-ai/llama-3",
+            model="meta-ai/muse-spark",
             messages=[ChatMessage(role="user", content="Hi")],
         )
-        assert req.model == "meta-ai/llama-3"
+        assert req.model == "meta-ai/muse-spark"
         assert len(req.messages) == 1
 
     def test_optional_fields(self):
@@ -69,7 +69,7 @@ class TestChatCompletionRequest:
     def test_to_internal(self):
         """Conversion to internal ChatRequest preserves all fields."""
         req = ChatCompletionRequest(
-            model="meta-ai/llama-3",
+            model="meta-ai/muse-spark",
             messages=[ChatMessage(role="user", content="Hello")],
             stream=True,
             temperature=0.7,
@@ -77,7 +77,7 @@ class TestChatCompletionRequest:
         )
         internal = req.to_internal()
         assert isinstance(internal, InternalChatRequest)
-        assert internal.model == "meta-ai/llama-3"
+        assert internal.model == "meta-ai/muse-spark"
         assert len(internal.messages) == 1
         assert internal.messages[0].content == "Hello"
         assert internal.stream is True
@@ -97,14 +97,14 @@ class TestChatCompletionResponse:
         """Building from internal ChatResponse."""
         internal = InternalChatResponse(
             id="resp-123",
-            model="meta-ai/llama-3",
+            model="meta-ai/muse-spark",
             content="Hello!",
             finish_reason="stop",
         )
         resp = ChatCompletionResponse.from_internal(internal)
         assert resp.id == "resp-123"
         assert resp.object == "chat.completion"
-        assert resp.model == "meta-ai/llama-3"
+        assert resp.model == "meta-ai/muse-spark"
         assert len(resp.choices) == 1
         assert resp.choices[0].message.content == "Hello!"
         assert resp.choices[0].finish_reason == "stop"
@@ -133,7 +133,7 @@ class TestStreamResponse:
         """Building from chunk with content."""
         chunk = StreamChunk(content="Hello", finish_reason=None)
         stream_resp = ChatCompletionStreamResponse.from_chunk(
-            content=chunk.content, model="meta-ai/llama-3"
+            content=chunk.content, model="meta-ai/muse-spark"
         )
         assert stream_resp.object == "chat.completion.chunk"
         assert len(stream_resp.choices) == 1
@@ -165,13 +165,13 @@ class TestModelList:
     def test_from_model_infos(self):
         """Building ModelList from ModelInfo objects."""
         models = [
-            ModelInfo(id="meta-ai/llama-3", provider="meta_ai"),
+            ModelInfo(id="meta-ai/muse-spark", provider="meta_ai"),
             ModelInfo(id="zai/glm-5", provider="zai_web"),
         ]
         ml = ModelList.from_model_infos(models)
         assert ml.object == "list"
         assert len(ml.data) == 2
-        assert ml.data[0].id == "meta-ai/llama-3"
+        assert ml.data[0].id == "meta-ai/muse-spark"
         assert ml.data[0].owned_by == "meta_ai"
         assert ml.data[1].id == "zai/glm-5"
 

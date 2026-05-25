@@ -91,7 +91,7 @@ def zai_creds():
 def chat_request():
     """Basic chat request fixture."""
     return ChatRequest(
-        model="meta-ai/llama-3",
+        model="meta-ai/muse-spark",
         messages=[ChatMessage(role="user", content="Hello")],
     )
 
@@ -332,11 +332,11 @@ class TestProviderRegistry:
         provider = MetaAIProvider(retries=0)
         registry.register("meta_ai", provider, ["meta-ai/"])
 
-        resolved = registry.get_provider_for_model("meta-ai/llama-3")
+        resolved = registry.get_provider_for_model("meta-ai/muse-spark")
         assert resolved is not None
         p, local_model = resolved
         assert p is provider
-        assert local_model == "llama-3"
+        assert local_model == "muse-spark"
 
     async def test_unknown_model_returns_none(self):
         """Prefix that doesn't match returns None."""

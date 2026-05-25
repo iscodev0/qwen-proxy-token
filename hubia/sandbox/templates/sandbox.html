@@ -3,10 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Hubia — Credential Sandbox</title>
+<title>Qwen Proxy — Credential Manager</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-  /* Minimal custom overrides — most styling via Tailwind */
   .collapse-content { overflow: hidden; transition: max-height 0.3s ease; }
   .spinner { animation: spin 1s linear infinite; }
   @keyframes spin { 100% { transform: rotate(360deg); } }
@@ -30,43 +29,22 @@
 
 <div class="max-w-3xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
 
-  <!-- ============================================================
-       Header
-       ============================================================ -->
+  <!-- Header -->
   <div class="mb-8 pb-6 border-b border-gray-200">
-    <h1 class="text-2xl font-bold text-gray-900">🔐 Credential Sandbox</h1>
+    <h1 class="text-2xl font-bold text-gray-900">Qwen Proxy</h1>
     <p class="mt-1 text-sm text-gray-500">
-      Manage provider credentials for Meta AI and Z.ai.
+      Manage your Qwen credentials and test the OpenAI-compatible API.
     </p>
-    <div class="mt-3 flex flex-wrap items-center gap-3 text-sm text-gray-500">
-      <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
-        User
-      </span>
-      <span id="username">{{ user.username }}</span>
-      <span class="text-gray-300">|</span>
-      <span>ID: <code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">{{ user.id }}</code></span>
-    </div>
-    <!-- API Key display (shown after token entry) -->
-    <div id="apiKeySection" class="mt-3 hidden rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm">
-      <div class="flex items-center gap-2">
-        <span class="font-medium text-gray-700">Your API Key:</span>
-        <code id="apiKey" class="break-all bg-gray-50 px-2 py-0.5 rounded text-xs"></code>
-      </div>
-      <p class="mt-1 text-xs text-gray-400">Use this as the Bearer token in your API requests.</p>
-    </div>
   </div>
 
-  <!-- ============================================================
-       Meta AI Section
-       ============================================================ -->
-  <div id="metaAiCard" class="mb-8 rounded-xl border border-gray-200 bg-white shadow-sm">
-    <!-- Header bar -->
+  <!-- Qwen Card -->
+  <div id="qwenCard" class="mb-8 rounded-xl border border-gray-200 bg-white shadow-sm">
     <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-      <h2 class="text-lg font-semibold text-gray-900">Meta AI</h2>
-      <div class="flex items-center gap-2 text-sm" id="metaStatusBar">
-        <span id="metaStatusDot" class="inline-block h-2.5 w-2.5 rounded-full {% if meta_status == 'stored' %}bg-emerald-500{% else %}bg-gray-300{% endif %}"></span>
-        <span id="metaStatusText" class="text-gray-500">
-          {% if meta_status == 'stored' %}Credentials stored{% else %}No credentials{% endif %}
+      <h2 class="text-lg font-semibold text-gray-900">Qwen Credentials</h2>
+      <div class="flex items-center gap-2 text-sm" id="qwenStatusBar">
+        <span id="qwenStatusDot" class="inline-block h-2.5 w-2.5 rounded-full {% if qwen_status == 'stored' %}bg-emerald-500{% else %}bg-gray-300{% endif %}"></span>
+        <span id="qwenStatusText" class="text-gray-500">
+          {% if qwen_status == 'stored' %}Credentials stored{% else %}No credentials{% endif %}
         </span>
       </div>
     </div>
@@ -76,25 +54,24 @@
       <!-- Mode 1: Auto-capture -->
       <div>
         <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-          <span>🚀 Auto-Capture</span>
+          <span>Auto-Capture</span>
           <span class="rounded bg-green-50 px-1.5 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">Recommended</span>
         </h3>
         <p class="text-sm text-gray-500 mb-3">
-          Opens a visible browser on the server. Log in to Meta AI manually,
-          then click <strong>"Done"</strong> in this page when finished. Cookies are captured automatically.
+          Opens a visible browser on the server. Log in to Qwen manually,
+          then click <strong>"Done"</strong> when finished. Session cookies are captured automatically.
         </p>
         <div class="flex flex-wrap items-center gap-3">
-          <button id="metaCaptureBtn" onclick="startMetaAiCapture()"
+          <button id="qwenCaptureBtn" onclick="startQwenCapture()"
                   class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-            <span>🚀</span> Capture Meta AI Cookies
+            Capture Qwen Cookies
           </button>
-          <button id="metaDoneBtn" onclick="signalMetaAiDone()" disabled
+          <button id="qwenDoneBtn" onclick="signalQwenDone()" disabled
                   class="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-            ✓ Done — Extract Cookies
+            Done — Extract Cookies
           </button>
         </div>
-        <!-- Progress / status -->
-        <div id="metaCaptureProgress" class="mt-3 hidden text-sm"></div>
+        <div id="qwenCaptureProgress" class="mt-3 hidden text-sm"></div>
       </div>
 
       <!-- Divider -->
@@ -102,20 +79,20 @@
 
       <!-- Mode 2: Manual input (collapsible) -->
       <div>
-        <button onclick="toggleCollapse('metaManualSection')"
+        <button onclick="toggleCollapse('qwenManualSection')"
                 class="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
-          <svg id="metaManualChevron" class="h-4 w-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg id="qwenManualChevron" class="h-4 w-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
           </svg>
-          📋 Manual Cookie Input (Advanced)
+          Manual Cookie Input (Advanced)
         </button>
-        <div id="metaManualSection" class="collapse-content max-h-0 mt-3">
+        <div id="qwenManualSection" class="collapse-content max-h-0 mt-3">
           <div class="space-y-3 rounded-lg bg-gray-50 border border-gray-200 p-4">
             <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Step-by-step instructions</p>
             <ol class="space-y-2 text-sm text-gray-600">
               <li class="flex items-start gap-2">
                 <span class="step-num">1</span>
-                <span>Open <strong>Meta AI</strong> (<code class="text-xs">https://www.meta.ai/</code>) in your browser and log in.</span>
+                <span>Open <strong>Qwen</strong> (<code class="text-xs">https://chat.qwen.ai/</code>) in your browser and log in.</span>
               </li>
               <li class="flex items-start gap-2">
                 <span class="step-num">2</span>
@@ -123,145 +100,29 @@
               </li>
               <li class="flex items-start gap-2">
                 <span class="step-num">3</span>
-                <span>Go to <strong>Application</strong> → <strong>Cookies</strong> → <code class="text-xs">https://www.meta.ai</code>.</span>
+                <span>Go to <strong>Application</strong> → <strong>Cookies</strong> → <code class="text-xs">https://chat.qwen.ai</code>.</span>
               </li>
               <li class="flex items-start gap-2">
                 <span class="step-num">4</span>
-                <span>Copy the values for <code class="text-xs font-semibold">datr</code> and <code class="text-xs font-semibold">ecto_1_sess</code>.</span>
+                <span>Copy ALL cookies (token, acw_tc, aui, cna, etc.) as a JSON object.</span>
               </li>
               <li class="flex items-start gap-2">
                 <span class="step-num">5</span>
-                <span>Paste them below and click <strong>"Save Cookies"</strong>.</span>
+                <span>Paste the cookies JSON below and click <strong>"Save Cookies"</strong>.</span>
               </li>
             </ol>
             <div class="mt-4 space-y-3">
               <div>
-                <label class="block text-xs font-medium text-gray-500 mb-1"><code>datr</code></label>
-                <input id="metaDatr" type="text" placeholder="Paste datr cookie value"
-                       class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-mono">
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-500 mb-1"><code>ecto_1_sess</code></label>
-                <input id="metaEctoSess" type="text" placeholder="Paste ecto_1_sess cookie value"
-                       class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-mono">
-              </div>
-              <div class="flex gap-2">
-                <button onclick="saveMetaManual()"
-                        class="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors">
-                  Save Cookies
-                </button>
-                <button onclick="validateMetaCookies()"
-                        class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors">
-                  Validate
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Delete -->
-      <div class="flex items-center justify-between border-t border-gray-100 pt-4">
-        <button onclick="deleteCredential('meta_ai')"
-                class="text-sm font-medium text-red-600 hover:text-red-700 transition-colors">
-          Delete stored credentials
-        </button>
-      </div>
-
-      <!-- Messages -->
-      <div id="metaMsg" class="text-sm hidden"></div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       Z.ai Section
-       ============================================================ -->
-  <div id="zaiCard" class="mb-8 rounded-xl border border-gray-200 bg-white shadow-sm">
-    <!-- Header bar -->
-    <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-      <h2 class="text-lg font-semibold text-gray-900">Z.ai</h2>
-      <div class="flex items-center gap-2 text-sm" id="zaiStatusBar">
-        <span id="zaiStatusDot" class="inline-block h-2.5 w-2.5 rounded-full {% if zai_status == 'stored' %}bg-emerald-500{% else %}bg-gray-300{% endif %}"></span>
-        <span id="zaiStatusText" class="text-gray-500">
-          {% if zai_status == 'stored' %}Credentials stored{% else %}No credentials{% endif %}
-        </span>
-      </div>
-    </div>
-
-    <div class="px-6 py-5 space-y-6">
-
-      <!-- Mode 1: Auto-capture -->
-      <div>
-        <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-          <span>🚀 Auto-Capture</span>
-          <span class="rounded bg-green-50 px-1.5 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">Recommended</span>
-        </h3>
-        <p class="text-sm text-gray-500 mb-3">
-          Opens a visible browser on the server. Log in to Z.ai manually,
-          then click <strong>"Done"</strong> when finished. The session token is captured automatically.
-        </p>
-        <div class="flex flex-wrap items-center gap-3">
-          <button id="zaiCaptureBtn" onclick="startZaiCapture()"
-                  class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-            <span>🚀</span> Capture Z.ai Token
-          </button>
-          <button id="zaiDoneBtn" onclick="signalZaiDone()" disabled
-                  class="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-            ✓ Done — Extract Token
-          </button>
-        </div>
-        <div id="zaiCaptureProgress" class="mt-3 hidden text-sm"></div>
-      </div>
-
-      <!-- Divider -->
-      <div class="border-t border-gray-100"></div>
-
-      <!-- Mode 2: Manual input (collapsible) -->
-      <div>
-        <button onclick="toggleCollapse('zaiManualSection')"
-                class="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
-          <svg id="zaiManualChevron" class="h-4 w-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-          </svg>
-          📋 Manual Token Input (Advanced)
-        </button>
-        <div id="zaiManualSection" class="collapse-content max-h-0 mt-3">
-          <div class="space-y-3 rounded-lg bg-gray-50 border border-gray-200 p-4">
-            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Step-by-step instructions</p>
-            <ol class="space-y-2 text-sm text-gray-600">
-              <li class="flex items-start gap-2">
-                <span class="step-num">1</span>
-                <span>Open <strong>Z.ai</strong> (<code class="text-xs">https://chat.z.ai/</code>) in your browser and log in.</span>
-              </li>
-              <li class="flex items-start gap-2">
-                <span class="step-num">2</span>
-                <span>Press <kbd class="rounded border border-gray-300 bg-white px-1.5 py-0.5 text-xs font-medium">F12</kbd> to open DevTools.</span>
-              </li>
-              <li class="flex items-start gap-2">
-                <span class="step-num">3</span>
-                <span>Go to <strong>Application</strong> → <strong>Local Storage</strong> → <code class="text-xs">https://chat.z.ai</code>.</span>
-              </li>
-              <li class="flex items-start gap-2">
-                <span class="step-num">4</span>
-                <span>Copy the value of the <code class="text-xs font-semibold">token</code> or <code class="text-xs font-semibold">jwt</code> key.</span>
-              </li>
-              <li class="flex items-start gap-2">
-                <span class="step-num">5</span>
-                <span>Paste it below and click <strong>"Save Token"</strong>.</span>
-              </li>
-            </ol>
-            <div class="mt-4 space-y-3">
-              <div>
-                <label class="block text-xs font-medium text-gray-500 mb-1">Session Token (JWT)</label>
-                <textarea id="zaiToken" rows="2" placeholder="eyJhbGciOiJSUzI1NiIs..."
+                <label class="block text-xs font-medium text-gray-500 mb-1">All Cookies (JSON format)</label>
+                <textarea id="qwenCookies" rows="4" placeholder='{"token": "eyJ...", "acw_tc": "...", "aui": "...", "cna": "..."}'
                           class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-mono"></textarea>
               </div>
               <div class="flex gap-2">
-                <button onclick="saveZaiManual()"
+                <button onclick="saveQwenManual()"
                         class="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors">
-                  Save Token
+                  Save Cookies
                 </button>
-                <button onclick="validateZaiToken()"
+                <button onclick="validateQwenCookies()"
                         class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors">
                   Validate
                 </button>
@@ -273,24 +134,22 @@
 
       <!-- Delete -->
       <div class="flex items-center justify-between border-t border-gray-100 pt-4">
-        <button onclick="deleteCredential('zai_web')"
+        <button onclick="deleteCredential('qwen_chat')"
                 class="text-sm font-medium text-red-600 hover:text-red-700 transition-colors">
           Delete stored credentials
         </button>
       </div>
 
       <!-- Messages -->
-      <div id="zaiMsg" class="text-sm hidden"></div>
+      <div id="qwenMsg" class="text-sm hidden"></div>
     </div>
   </div>
 
-  <!-- ============================================================
-       API Usage Examples
-       ============================================================ -->
+  <!-- API Usage Examples -->
   <div class="rounded-xl border border-gray-200 bg-white shadow-sm px-6 py-5 mb-8">
-    <h2 class="text-lg font-semibold text-gray-900 mb-1">📡 API Usage</h2>
+    <h2 class="text-lg font-semibold text-gray-900 mb-1">API Usage</h2>
     <p class="text-sm text-gray-500 mb-4">
-      Use your API key to call the OpenAI-compatible endpoints.
+      Use the OpenAI-compatible endpoints to access Qwen models.
     </p>
 
     <div class="space-y-4">
@@ -299,8 +158,7 @@
         <p class="text-xs font-medium text-gray-500 mb-1.5">List available models</p>
         <div class="rounded-lg bg-gray-900 px-4 py-3 overflow-x-auto">
           <pre class="text-xs text-gray-300 leading-relaxed font-mono"><span class="text-gray-500"># List models</span>
-curl https://api.hubia.dev/v1/models \
-  -H <span class="text-amber-300">"Authorization: Bearer YOUR_API_KEY"</span></pre>
+curl http://localhost:8000/v1/models</pre>
         </div>
       </div>
 
@@ -309,11 +167,10 @@ curl https://api.hubia.dev/v1/models \
         <p class="text-xs font-medium text-gray-500 mb-1.5">Chat completion (non-streaming)</p>
         <div class="rounded-lg bg-gray-900 px-4 py-3 overflow-x-auto">
           <pre class="text-xs text-gray-300 leading-relaxed font-mono"><span class="text-gray-500"># Chat completion</span>
-curl https://api.hubia.dev/v1/chat/completions \
-  -H <span class="text-amber-300">"Authorization: Bearer YOUR_API_KEY"</span> \
+curl http://localhost:8000/v1/chat/completions \
   -H <span class="text-amber-300">"Content-Type: application/json"</span> \
   -d '{
-    <span class="text-sky-300">"model"</span>: <span class="text-emerald-300">"meta-ai/llama-3"</span>,
+    <span class="text-sky-300">"model"</span>: <span class="text-emerald-300">"qwen/qwen3.7-max"</span>,
     <span class="text-sky-300">"messages"</span>: [{<span class="text-sky-300">"role"</span>: <span class="text-emerald-300">"user"</span>, <span class="text-sky-300">"content"</span>: <span class="text-emerald-300">"Hello"</span>}]
   }'</pre>
         </div>
@@ -324,11 +181,10 @@ curl https://api.hubia.dev/v1/chat/completions \
         <p class="text-xs font-medium text-gray-500 mb-1.5">Chat completion (streaming)</p>
         <div class="rounded-lg bg-gray-900 px-4 py-3 overflow-x-auto">
           <pre class="text-xs text-gray-300 leading-relaxed font-mono"><span class="text-gray-500"># Streaming chat completion</span>
-curl https://api.hubia.dev/v1/chat/completions \
-  -H <span class="text-amber-300">"Authorization: Bearer YOUR_API_KEY"</span> \
+curl http://localhost:8000/v1/chat/completions \
   -H <span class="text-amber-300">"Content-Type: application/json"</span> \
   -d '{
-    <span class="text-sky-300">"model"</span>: <span class="text-emerald-300">"zai/glm-5"</span>,
+    <span class="text-sky-300">"model"</span>: <span class="text-emerald-300">"qwen/qwen3.7-max"</span>,
     <span class="text-sky-300">"messages"</span>: [{<span class="text-sky-300">"role"</span>: <span class="text-emerald-300">"user"</span>, <span class="text-sky-300">"content"</span>: <span class="text-emerald-300">"Hello"</span>}],
     <span class="text-sky-300">"stream"</span>: <span class="text-rose-300">true</span>
   }'</pre>
@@ -343,10 +199,6 @@ curl https://api.hubia.dev/v1/chat/completions \
 // ===========================================================================
 // Helpers
 // ===========================================================================
-
-function getToken() {
-  return localStorage.getItem('hubia_token') || '';
-}
 
 function showMsg(containerId, type, text) {
   const el = document.getElementById(containerId);
@@ -366,7 +218,7 @@ function showMsg(containerId, type, text) {
 async function apiPost(path, body) {
   const resp = await fetch(path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
   if (!resp.ok) {
@@ -377,9 +229,7 @@ async function apiPost(path, body) {
 }
 
 async function apiGet(path) {
-  const resp = await fetch(path, {
-    headers: { 'Authorization': 'Bearer ' + getToken() }
-  });
+  const resp = await fetch(path);
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
     throw new Error(err.detail || `HTTP ${resp.status}`);
@@ -388,10 +238,7 @@ async function apiGet(path) {
 }
 
 async function apiDelete(path) {
-  const resp = await fetch(path, {
-    method: 'DELETE',
-    headers: { 'Authorization': 'Bearer ' + getToken() }
-  });
+  const resp = await fetch(path, { method: 'DELETE' });
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
     throw new Error(err.detail || `HTTP ${resp.status}`);
@@ -414,104 +261,53 @@ function toggleCollapse(id) {
 }
 
 // ===========================================================================
-// Interactive Capture — Meta AI
+// Interactive Capture — Qwen
 // ===========================================================================
 
-let metaCaptureId = null;
-let metaPollTimer = null;
+let qwenCaptureId = null;
+let qwenPollTimer = null;
 
-async function startMetaAiCapture() {
-  const btn = document.getElementById('metaCaptureBtn');
-  const doneBtn = document.getElementById('metaDoneBtn');
-  const progress = document.getElementById('metaCaptureProgress');
+async function startQwenCapture() {
+  const btn = document.getElementById('qwenCaptureBtn');
+  const doneBtn = document.getElementById('qwenDoneBtn');
+  const progress = document.getElementById('qwenCaptureProgress');
 
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner">⏳</span> Starting...';
+  btn.innerHTML = '<span class="spinner">&#8987;</span> Starting...';
   progress.className = 'text-sm mt-3 p-3 rounded-lg bg-blue-50 text-blue-800 border border-blue-200';
-  progress.textContent = '⏳ Launching browser...';
+  progress.textContent = 'Launching browser...';
   progress.style.display = 'block';
 
   try {
-    const result = await apiPost('/sandbox/meta-ai/capture/start', {});
-    metaCaptureId = result.capture_id;
-    progress.textContent = '🌐 Browser opened. Log in to Meta AI in the browser window, then click "Done — Extract Cookies" above.';
+    const result = await apiPost('/sandbox/qwen/capture/start', {});
+    qwenCaptureId = result.capture_id;
+    progress.textContent = 'Browser opened. Log in to Qwen in the browser window, then click "Done — Extract Cookies" above.';
     doneBtn.disabled = false;
-    startMetaPolling('meta');
+    startCapturePolling();
   } catch (err) {
     progress.className = 'text-sm mt-3 p-3 rounded-lg bg-red-50 text-red-800 border border-red-200';
-    progress.textContent = '❌ ' + err.message;
+    progress.textContent = err.message;
     btn.disabled = false;
-    btn.innerHTML = '<span>🚀</span> Capture Meta AI Cookies';
+    btn.innerHTML = 'Capture Qwen Cookies';
   }
 }
 
-async function signalMetaAiDone() {
-  if (!metaCaptureId) return;
-  const doneBtn = document.getElementById('metaDoneBtn');
-  const progress = document.getElementById('metaCaptureProgress');
+async function signalQwenDone() {
+  if (!qwenCaptureId) return;
+  const doneBtn = document.getElementById('qwenDoneBtn');
+  const progress = document.getElementById('qwenCaptureProgress');
 
   doneBtn.disabled = true;
-  doneBtn.textContent = '⏳ Extracting...';
-  progress.textContent = '⏳ Extracting cookies...';
+  doneBtn.textContent = 'Extracting...';
+  progress.textContent = 'Extracting cookies...';
   progress.className = 'text-sm mt-3 p-3 rounded-lg bg-blue-50 text-blue-800 border border-blue-200';
   progress.style.display = 'block';
 
   try {
-    await apiPost('/sandbox/meta-ai/capture/' + metaCaptureId + '/done', {});
+    await apiPost('/sandbox/qwen/capture/' + qwenCaptureId + '/done', {});
   } catch (err) {
     progress.className = 'text-sm mt-3 p-3 rounded-lg bg-red-50 text-red-800 border border-red-200';
-    progress.textContent = '❌ ' + err.message;
-  }
-}
-
-// ===========================================================================
-// Interactive Capture — Z.ai
-// ===========================================================================
-
-let zaiCaptureId = null;
-let zaiPollTimer = null;
-
-async function startZaiCapture() {
-  const btn = document.getElementById('zaiCaptureBtn');
-  const doneBtn = document.getElementById('zaiDoneBtn');
-  const progress = document.getElementById('zaiCaptureProgress');
-
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner">⏳</span> Starting...';
-  progress.className = 'text-sm mt-3 p-3 rounded-lg bg-blue-50 text-blue-800 border border-blue-200';
-  progress.textContent = '⏳ Launching browser...';
-  progress.style.display = 'block';
-
-  try {
-    const result = await apiPost('/sandbox/zai/capture/start', {});
-    zaiCaptureId = result.capture_id;
-    progress.textContent = '🌐 Browser opened. Log in to Z.ai in the browser window, then click "Done — Extract Token" above.';
-    doneBtn.disabled = false;
-    startMetaPolling('zai');
-  } catch (err) {
-    progress.className = 'text-sm mt-3 p-3 rounded-lg bg-red-50 text-red-800 border border-red-200';
-    progress.textContent = '❌ ' + err.message;
-    btn.disabled = false;
-    btn.innerHTML = '<span>🚀</span> Capture Z.ai Token';
-  }
-}
-
-async function signalZaiDone() {
-  if (!zaiCaptureId) return;
-  const doneBtn = document.getElementById('zaiDoneBtn');
-  const progress = document.getElementById('zaiCaptureProgress');
-
-  doneBtn.disabled = true;
-  doneBtn.textContent = '⏳ Extracting...';
-  progress.textContent = '⏳ Extracting token...';
-  progress.className = 'text-sm mt-3 p-3 rounded-lg bg-blue-50 text-blue-800 border border-blue-200';
-  progress.style.display = 'block';
-
-  try {
-    await apiPost('/sandbox/zai/capture/' + zaiCaptureId + '/done', {});
-  } catch (err) {
-    progress.className = 'text-sm mt-3 p-3 rounded-lg bg-red-50 text-red-800 border border-red-200';
-    progress.textContent = '❌ ' + err.message;
+    progress.textContent = err.message;
   }
 }
 
@@ -519,124 +315,119 @@ async function signalZaiDone() {
 // Polling
 // ===========================================================================
 
-function startMetaPolling(provider) {
+function startCapturePolling() {
   const interval = setInterval(async () => {
-    const captureId = provider === 'meta' ? metaCaptureId : zaiCaptureId;
-    if (!captureId) { clearInterval(interval); return; }
+    if (!qwenCaptureId) { clearInterval(interval); return; }
 
     try {
-      const state = await apiGet('/sandbox/' + provider + '-ai/capture/' + captureId + '/status');
-      const progressEl = document.getElementById(provider === 'meta' ? 'metaCaptureProgress' : 'zaiCaptureProgress');
-      const captureBtn = document.getElementById(provider === 'meta' ? 'metaCaptureBtn' : 'zaiCaptureBtn');
-      const doneBtn = document.getElementById(provider === 'meta' ? 'metaDoneBtn' : 'zaiDoneBtn');
+      const state = await apiGet('/sandbox/qwen/capture/' + qwenCaptureId + '/status');
+      const progressEl = document.getElementById('qwenCaptureProgress');
+      const captureBtn = document.getElementById('qwenCaptureBtn');
+      const doneBtn = document.getElementById('qwenDoneBtn');
 
       if (state.status === 'ok') {
         clearInterval(interval);
         progressEl.className = 'text-sm mt-3 p-3 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200';
-        progressEl.textContent = '✅ Capture successful! Credentials stored.';
+        progressEl.textContent = 'Capture successful! Credentials stored.';
         captureBtn.disabled = false;
-        captureBtn.innerHTML = '<span>🚀</span> Capture ' + (provider === 'meta' ? 'Meta AI Cookies' : 'Z.ai Token');
+        captureBtn.innerHTML = 'Capture Qwen Cookies';
         doneBtn.disabled = true;
-        doneBtn.textContent = '✓ Done — ' + (provider === 'meta' ? 'Extract Cookies' : 'Extract Token');
-        updateStatus(provider, 'stored');
-        // Clean up capture state
-        if (provider === 'meta') metaCaptureId = null;
-        else zaiCaptureId = null;
+        doneBtn.textContent = 'Done — Extract Cookies';
+        updateStatus('stored');
+        qwenCaptureId = null;
       } else if (state.status === 'error') {
         clearInterval(interval);
         progressEl.className = 'text-sm mt-3 p-3 rounded-lg bg-red-50 text-red-800 border border-red-200';
-        progressEl.textContent = '❌ ' + (state.error || 'Capture failed.');
+        progressEl.textContent = state.error || 'Capture failed.';
         captureBtn.disabled = false;
-        captureBtn.innerHTML = '<span>🚀</span> Capture ' + (provider === 'meta' ? 'Meta AI Cookies' : 'Z.ai Token');
+        captureBtn.innerHTML = 'Capture Qwen Cookies';
         doneBtn.disabled = true;
-        doneBtn.textContent = '✓ Done — ' + (provider === 'meta' ? 'Extract Cookies' : 'Extract Token');
-        if (provider === 'meta') metaCaptureId = null;
-        else zaiCaptureId = null;
+        doneBtn.textContent = 'Done — Extract Cookies';
+        qwenCaptureId = null;
       } else {
-        // Still pending
         progressEl.className = 'text-sm mt-3 p-3 rounded-lg bg-blue-50 text-blue-800 border border-blue-200';
-        progressEl.textContent = '⏳ Waiting for login... (polling every 2s)';
+        progressEl.textContent = 'Waiting for login... (polling every 2s)';
       }
-    } catch (err) {
-      // Ignore transient polling errors
-    }
+    } catch (_) {}
   }, 2000);
 
-  // Store interval reference
-  if (provider === 'meta') metaPollTimer = interval;
-  else zaiPollTimer = interval;
+  qwenPollTimer = interval;
 }
 
 // ===========================================================================
-// Manual Input — Meta AI
+// Manual Input — Qwen
 // ===========================================================================
 
-async function saveMetaManual() {
-  const datr = document.getElementById('metaDatr').value.trim();
-  const ecto = document.getElementById('metaEctoSess').value.trim();
+async function saveQwenManual() {
+  const cookiesText = document.getElementById('qwenCookies').value.trim();
+  if (!cookiesText) {
+    showMsg('qwenMsg', 'error', 'Please enter your Qwen cookies as JSON.');
+    return;
+  }
 
-  if (!datr || !ecto) {
-    showMsg('metaMsg', 'error', 'Please fill in both cookie fields.');
+  let cookies;
+  try {
+    cookies = JSON.parse(cookiesText);
+  } catch (e) {
+    showMsg('qwenMsg', 'error', 'Invalid JSON: ' + e.message);
+    return;
+  }
+
+  if (typeof cookies !== 'object' || cookies === null || Array.isArray(cookies)) {
+    showMsg('qwenMsg', 'error', 'Cookies must be a JSON object (key-value pairs).');
+    return;
+  }
+
+  if (!cookies.token || cookies.token.length < 20) {
+    showMsg('qwenMsg', 'error', 'Missing or invalid "token" cookie (min 20 chars).');
     return;
   }
 
   try {
-    await apiPost('/sandbox/meta-ai/capture', { cookies: { datr, ecto_1_sess: ecto } });
-    showMsg('metaMsg', 'success', 'Cookies saved successfully!');
-    updateStatus('meta', 'stored');
+    await apiPost('/sandbox/qwen/capture', { cookies });
+    showMsg('qwenMsg', 'success', 'Cookies saved successfully!');
+    updateStatus('stored');
   } catch (err) {
-    showMsg('metaMsg', 'error', err.message);
+    showMsg('qwenMsg', 'error', err.message);
   }
 }
 
-async function validateMetaCookies() {
-  const datr = document.getElementById('metaDatr').value.trim();
-  const ecto = document.getElementById('metaEctoSess').value.trim();
-
-  if (datr && ecto) {
-    showMsg('metaMsg', 'info', '✓ Both cookie values provided.');
-  } else {
-    showMsg('metaMsg', 'error', 'Missing required cookie values. Please fill in both datr and ecto_1_sess.');
-  }
-}
-
-// ===========================================================================
-// Manual Input — Z.ai
-// ===========================================================================
-
-async function saveZaiManual() {
-  const token = document.getElementById('zaiToken').value.trim();
-  if (!token) {
-    showMsg('zaiMsg', 'error', 'Please enter a token.');
+async function validateQwenCookies() {
+  const cookiesText = document.getElementById('qwenCookies').value.trim();
+  if (!cookiesText) {
+    showMsg('qwenMsg', 'error', 'Please enter your Qwen cookies as JSON.');
     return;
   }
 
+  let cookies;
   try {
-    await apiPost('/sandbox/zai/capture', { token });
-    showMsg('zaiMsg', 'success', 'Token saved successfully!');
-    updateStatus('zai', 'stored');
-  } catch (err) {
-    showMsg('zaiMsg', 'error', err.message);
+    cookies = JSON.parse(cookiesText);
+  } catch (e) {
+    showMsg('qwenMsg', 'error', 'Invalid JSON: ' + e.message);
+    return;
   }
-}
 
-async function validateZaiToken() {
-  const token = document.getElementById('zaiToken').value.trim();
-  if (token && token.length >= 10) {
-    showMsg('zaiMsg', 'info', '✓ Token looks valid (length: ' + token.length + ' chars).');
-  } else {
-    showMsg('zaiMsg', 'error', 'Token is empty or too short (min 10 characters).');
+  if (typeof cookies !== 'object' || cookies === null || Array.isArray(cookies)) {
+    showMsg('qwenMsg', 'error', 'Cookies must be a JSON object (key-value pairs).');
+    return;
   }
+
+  if (!cookies.token || cookies.token.length < 20) {
+    showMsg('qwenMsg', 'error', 'Missing or invalid "token" cookie (min 20 chars).');
+    return;
+  }
+
+  const cookieCount = Object.keys(cookies).length;
+  showMsg('qwenMsg', 'info', 'Cookies look valid (' + cookieCount + ' cookies found).');
 }
 
 // ===========================================================================
 // Status Updates
 // ===========================================================================
 
-function updateStatus(provider, status) {
-  const prefix = provider === 'meta' ? 'meta' : 'zai';
-  const dot = document.getElementById(prefix + 'StatusDot');
-  const txt = document.getElementById(prefix + 'StatusText');
+function updateStatus(status) {
+  const dot = document.getElementById('qwenStatusDot');
+  const txt = document.getElementById('qwenStatusText');
 
   if (status === 'stored') {
     dot.className = 'inline-block h-2.5 w-2.5 rounded-full bg-emerald-500';
@@ -656,34 +447,12 @@ async function deleteCredential(provider) {
 
   try {
     await apiDelete('/sandbox/credentials/' + provider);
-    if (provider === 'meta_ai') {
-      updateStatus('meta', 'none');
-      showMsg('metaMsg', 'success', 'Credentials deleted.');
-    } else {
-      updateStatus('zai', 'none');
-      showMsg('zaiMsg', 'success', 'Credentials deleted.');
-    }
+    updateStatus('none');
+    showMsg('qwenMsg', 'success', 'Credentials deleted.');
   } catch (err) {
-    if (provider === 'meta_ai') showMsg('metaMsg', 'error', err.message);
-    else showMsg('zaiMsg', 'error', err.message);
+    showMsg('qwenMsg', 'error', err.message);
   }
 }
-
-// ===========================================================================
-// Init
-// ===========================================================================
-
-document.addEventListener('DOMContentLoaded', () => {
-  const stored = localStorage.getItem('hubia_token');
-  if (!stored) {
-    const token = prompt('Enter your API key to enable sandbox operations:');
-    if (token) localStorage.setItem('hubia_token', token);
-  }
-  if (localStorage.getItem('hubia_token')) {
-    document.getElementById('apiKeySection').style.display = 'block';
-    document.getElementById('apiKey').textContent = localStorage.getItem('hubia_token');
-  }
-});
 </script>
 </body>
 </html>

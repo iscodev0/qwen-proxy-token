@@ -23,7 +23,7 @@ class TestModels:
         assert body["object"] == "list"
         assert len(body["data"]) >= 2
         model_ids = {m["id"] for m in body["data"]}
-        assert "meta-ai/llama-3" in model_ids
+        assert "meta-ai/muse-spark" in model_ids
         assert "zai/glm-5" in model_ids
 
     async def test_models_requires_auth(self, test_client):
@@ -48,14 +48,14 @@ class TestChatCompletions:
             "/v1/chat/completions",
             headers=auth_headers,
             json={
-                "model": "meta-ai/llama-3",
+                "model": "meta-ai/muse-spark",
                 "messages": [{"role": "user", "content": "Hello"}],
             },
         )
         assert resp.status_code == 200
         body = resp.json()
         assert body["object"] == "chat.completion"
-        assert body["model"] == "meta-ai/llama-3"
+        assert body["model"] == "meta-ai/muse-spark"
         assert len(body["choices"]) > 0
         assert body["choices"][0]["message"]["role"] == "assistant"
         assert "content" in body["choices"][0]["message"]
@@ -67,7 +67,7 @@ class TestChatCompletions:
         resp = await test_client.post(
             "/v1/chat/completions",
             json={
-                "model": "meta-ai/llama-3",
+                "model": "meta-ai/muse-spark",
                 "messages": [{"role": "user", "content": "Hi"}],
             },
         )
@@ -94,7 +94,7 @@ class TestChatCompletions:
             "/v1/chat/completions",
             headers=auth_headers,
             json={
-                "model": "meta-ai/llama-3",
+                "model": "meta-ai/muse-spark",
                 "messages": [{"role": "user", "content": "Hi"}],
             },
         )
@@ -128,7 +128,7 @@ class TestStreaming:
             "/v1/chat/completions",
             headers=auth_headers,
             json={
-                "model": "meta-ai/llama-3",
+                "model": "meta-ai/muse-spark",
                 "messages": [{"role": "user", "content": "Hello"}],
                 "stream": True,
             },
@@ -151,7 +151,7 @@ class TestStreaming:
             "/v1/chat/completions",
             headers=auth_headers,
             json={
-                "model": "meta-ai/llama-3",
+                "model": "meta-ai/muse-spark",
                 "messages": [{"role": "user", "content": "Hi"}],
                 "stream": True,
             },

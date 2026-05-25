@@ -5,6 +5,8 @@ Provides:
 - REST API for starting/checking/stopping capture sessions
 - Manual cookie/token input endpoints
 - Credential listing and deletion
+
+Only Qwen provider is supported.
 """
 
 from __future__ import annotations
@@ -23,10 +25,8 @@ from pydantic import BaseModel, Field
 
 from hubia.api.auth import get_current_user
 from hubia.sandbox.capture import (
-    capture_meta_ai_cookies_interactive,
-    capture_zai_token_interactive,
-    validate_meta_ai_cookies,
-    validate_zai_token,
+    capture_qwen_cookies_interactive,
+    validate_qwen_cookies,
 )
 from hubia.store.credentials import (
     delete_credential,
@@ -52,7 +52,7 @@ class CaptureState:
     """Tracks an interactive browser capture session."""
 
     capture_id: str
-    provider: str  # "meta_ai" or "zai_web"
+    provider: str  # "qwen_chat"
     status: str = "pending"  # pending | capturing | ok | error
     result: dict | None = None
     error: str | None = None
@@ -74,10 +74,8 @@ def _run_capture_background(state: CaptureState, db: aiosqlite.Connection, user_
 
     async def _capture_task():
         try:
-            if state.provider == "meta_ai":
-                result = await capture_meta_ai_cookies_interactive(state.stop_event)
-            elif state.provider == "zai_web":
-                result = await capture_zai_token_interactive(state.stop_event)
+            if state.provider == "qwen_chat":
+                result = await capture_qwen_cookies_interactive(state.stop_event)
             else:
                 state.status = "error"
                 state.error = f"Unknown provider: {state.provider}"
@@ -87,10 +85,7 @@ def _run_capture_background(state: CaptureState, db: aiosqlite.Connection, user_
                 state.status = "ok"
                 state.result = result
                 # Persist to database
-                if state.provider == "meta_ai":
-                    cred_data: dict = result["cookies"]
-                else:
-                    cred_data = {"token": result["token"]}
+                cred_data = {"cookies": result["cookies"]}
                 await store_credential(db, user_id, state.provider, cred_data)
             else:
                 state.status = "error"
@@ -108,22 +103,12 @@ def _run_capture_background(state: CaptureState, db: aiosqlite.Connection, user_
 # ---------------------------------------------------------------------------
 
 
-class MetaAICaptureRequest(BaseModel):
-    """Manual cookie input for Meta AI."""
+class QwenCaptureRequest(BaseModel):
+    """Manual cookies input for Qwen."""
 
     cookies: dict = Field(
         ...,
-        description="Cookie dict with datr and ecto_1_sess values",
-    )
-
-
-class ZaiCaptureRequest(BaseModel):
-    """Manual token input for Z.ai."""
-
-    token: str = Field(
-        ...,
-        min_length=10,
-        description="Z.ai session JWT token",
+        description="All cookies from chat.qwen.ai (token, acw_tc, aui, cna, etc.)",
     )
 
 
@@ -157,54 +142,51 @@ async def sandbox_page(
     """Serve the sandbox HTML interface for credential management.
 
     The page shows the current user's stored credentials status and provides
-    forms for capturing Meta AI cookies and Z.ai session tokens.
+    forms for capturing Qwen cookies.
     """
     creds = await list_credentials(db, current_user["id"])
 
     # Build status per provider
-    meta_status: str = "none"
-    zai_status: str = "none"
+    qwen_status: str = "none"
     for c in creds:
-        if c["provider"] == "meta_ai":
-            meta_status = "stored"
-        elif c["provider"] == "zai_web":
-            zai_status = "stored"
+        if c["provider"] == "qwen_chat":
+            qwen_status = "stored"
 
     return templates.TemplateResponse(
         request,
         "sandbox.html",
         {
             "user": current_user,
-            "meta_status": meta_status,
-            "zai_status": zai_status,
+            "qwen_status": qwen_status,
         },
     )
 
 
 # ---------------------------------------------------------------------------
-# POST /sandbox/meta-ai/capture — Manual cookie input only
+# POST /sandbox/qwen/capture — Manual cookies input
 # ---------------------------------------------------------------------------
 
 
-@router.post("/meta-ai/capture")
-async def capture_meta_ai(
-    body: MetaAICaptureRequest,
+@router.post("/qwen/capture")
+async def capture_qwen(
+    body: QwenCaptureRequest,
     current_user: dict = Depends(get_current_user),
     db: aiosqlite.Connection = Depends(get_db),
 ):
-    """Store Meta AI cookies provided manually by the user.
+    """Store Qwen cookies provided manually by the user.
 
-    Use this endpoint when the user copies cookies from their browser's
-    DevTools.  The cookies are validated before storage.
+    Use this endpoint when the user copies all cookies from the
+    browser's DevTools (Application → Cookies → chat.qwen.ai).
     """
-    validation = await validate_meta_ai_cookies(body.cookies)
+    validation = await validate_qwen_cookies(body.cookies)
     if not validation["valid"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=validation.get("error", "Invalid cookies"),
         )
 
-    stored = await store_credential(db, current_user["id"], "meta_ai", body.cookies)
+    cred_data = {"cookies": body.cookies}
+    stored = await store_credential(db, current_user["id"], "qwen_chat", cred_data)
     return {
         "status": "ok",
         "credential_id": stored["id"] if stored else None,
@@ -212,25 +194,25 @@ async def capture_meta_ai(
 
 
 # ---------------------------------------------------------------------------
-# POST /sandbox/meta-ai/capture/start — Interactive browser capture
+# POST /sandbox/qwen/capture/start — Interactive browser capture
 # ---------------------------------------------------------------------------
 
 
-@router.post("/meta-ai/capture/start")
-async def start_meta_ai_capture(
+@router.post("/qwen/capture/start")
+async def start_qwen_capture(
     current_user: dict = Depends(get_current_user),
     db: aiosqlite.Connection = Depends(get_db),
 ):
-    """Start an interactive browser-based cookie capture for Meta AI.
+    """Start an interactive browser-based cookie capture for Qwen.
 
-    Opens a visible browser on the server.  The user should log in to Meta AI
+    Opens a visible browser on the server.  The user should log in to Qwen
     manually in that browser.  Poll the ``status`` endpoint to check progress
     or call the ``done`` endpoint to signal completion.
     """
     capture_id = uuid.uuid4().hex[:12]
     state = CaptureState(
         capture_id=capture_id,
-        provider="meta_ai",
+        provider="qwen_chat",
     )
     _capture_states[capture_id] = state
 
@@ -240,21 +222,21 @@ async def start_meta_ai_capture(
         capture_id=capture_id,
         status="started",
         message="Interactive capture started. A browser window should open on the server. "
-        "Log in to Meta AI manually, then call the /done endpoint or wait for auto-detection.",
+        "Log in to Qwen manually, then call the /done endpoint or wait for auto-detection.",
     )
 
 
 # ---------------------------------------------------------------------------
-# GET /sandbox/meta-ai/capture/{capture_id}/status
+# GET /sandbox/qwen/capture/{capture_id}/status
 # ---------------------------------------------------------------------------
 
 
-@router.get("/meta-ai/capture/{capture_id}/status")
-async def check_meta_ai_capture_status(
+@router.get("/qwen/capture/{capture_id}/status")
+async def check_qwen_capture_status(
     capture_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Check the status of an interactive Meta AI capture session."""
+    """Check the status of an interactive Qwen capture session."""
     state = _capture_states.get(capture_id)
     if state is None:
         raise HTTPException(
@@ -270,20 +252,16 @@ async def check_meta_ai_capture_status(
 
 
 # ---------------------------------------------------------------------------
-# POST /sandbox/meta-ai/capture/{capture_id}/done
+# POST /sandbox/qwen/capture/{capture_id}/done
 # ---------------------------------------------------------------------------
 
 
-@router.post("/meta-ai/capture/{capture_id}/done")
-async def signal_meta_ai_capture_done(
+@router.post("/qwen/capture/{capture_id}/done")
+async def signal_qwen_capture_done(
     capture_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Signal that the user has finished logging in and cookies should be extracted.
-
-    This tells the background capture task to stop waiting and extract
-    whatever cookies are currently available.
-    """
+    """Signal that the user has finished logging in and cookies should be extracted."""
     state = _capture_states.get(capture_id)
     if state is None:
         raise HTTPException(
@@ -301,121 +279,6 @@ async def signal_meta_ai_capture_done(
     return {
         "status": "acknowledged",
         "message": "Done signal sent. Cookies will be extracted.",
-    }
-
-
-# ---------------------------------------------------------------------------
-# POST /sandbox/zai/capture — Manual token input only
-# ---------------------------------------------------------------------------
-
-
-@router.post("/zai/capture")
-async def capture_zai(
-    body: ZaiCaptureRequest,
-    current_user: dict = Depends(get_current_user),
-    db: aiosqlite.Connection = Depends(get_db),
-):
-    """Store a Z.ai session token provided manually by the user.
-
-    Use this endpoint when the user copies their session token from the
-    browser's DevTools (localStorage or cookies).
-    """
-    validation = await validate_zai_token(body.token)
-    if not validation["valid"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=validation.get("error", "Invalid token"),
-        )
-
-    cred_data = {"token": body.token}
-    stored = await store_credential(db, current_user["id"], "zai_web", cred_data)
-    return {
-        "status": "ok",
-        "credential_id": stored["id"] if stored else None,
-    }
-
-
-# ---------------------------------------------------------------------------
-# POST /sandbox/zai/capture/start — Interactive browser capture
-# ---------------------------------------------------------------------------
-
-
-@router.post("/zai/capture/start")
-async def start_zai_capture(
-    current_user: dict = Depends(get_current_user),
-    db: aiosqlite.Connection = Depends(get_db),
-):
-    """Start an interactive browser-based token capture for Z.ai."""
-    capture_id = uuid.uuid4().hex[:12]
-    state = CaptureState(
-        capture_id=capture_id,
-        provider="zai_web",
-    )
-    _capture_states[capture_id] = state
-
-    _run_capture_background(state, db, current_user["id"])
-
-    return CaptureStartResponse(
-        capture_id=capture_id,
-        status="started",
-        message="Interactive capture started. A browser window should open on the server. "
-        "Log in to Z.ai manually, then call the /done endpoint or wait for auto-detection.",
-    )
-
-
-# ---------------------------------------------------------------------------
-# GET /sandbox/zai/capture/{capture_id}/status
-# ---------------------------------------------------------------------------
-
-
-@router.get("/zai/capture/{capture_id}/status")
-async def check_zai_capture_status(
-    capture_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """Check the status of an interactive Z.ai capture session."""
-    state = _capture_states.get(capture_id)
-    if state is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Capture session not found",
-        )
-
-    return CaptureStatusResponse(
-        capture_id=capture_id,
-        status=state.status,
-        error=state.error,
-    )
-
-
-# ---------------------------------------------------------------------------
-# POST /sandbox/zai/capture/{capture_id}/done
-# ---------------------------------------------------------------------------
-
-
-@router.post("/zai/capture/{capture_id}/done")
-async def signal_zai_capture_done(
-    capture_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """Signal that the user has finished logging in and the token should be extracted."""
-    state = _capture_states.get(capture_id)
-    if state is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Capture session not found",
-        )
-
-    if state.status != "pending":
-        return {
-            "status": "acknowledged",
-            "capture_status": state.status,
-        }
-
-    state.stop_event.set()
-    return {
-        "status": "acknowledged",
-        "message": "Done signal sent. Token will be extracted.",
     }
 
 
@@ -451,7 +314,7 @@ async def delete_user_credential(
     """Delete stored credentials for a specific provider.
 
     Args:
-        provider: Provider name (e.g. ``"meta_ai"``, ``"zai_web"``).
+        provider: Provider name (e.g. ``"qwen_chat"``).
     """
     deleted = await delete_credential(db, current_user["id"], provider)
     if not deleted:
